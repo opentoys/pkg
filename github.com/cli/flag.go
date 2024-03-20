@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"errors"
 	"flag"
 	"fmt"
@@ -9,15 +10,15 @@ import (
 	"regexp"
 	"runtime"
 	"strings"
-	"syscall"
 	"time"
 )
 
 const defaultPlaceholder = "value"
 
-const (
-	defaultSliceFlagSeparator = ","
-	disableSliceFlagSeparator = false
+var (
+	defaultSliceFlagSeparator       = ","
+	defaultMapFlagKeyValueSeparator = "="
+	disableSliceFlagSeparator       = false
 )
 
 var (
@@ -26,28 +27,26 @@ var (
 	commaWhitespace = regexp.MustCompile("[, ]+.*")
 )
 
-// BashCompletionFlag enables bash-completion for all commands and subcommands
-var BashCompletionFlag Flag = &BoolFlag{
-	Name:   "generate-bash-completion",
+// GenerateShellCompletionFlag enables shell completion
+var GenerateShellCompletionFlag Flag = &BoolFlag{
+	Name:   "generate-shell-completion",
 	Hidden: true,
 }
 
 // VersionFlag prints the version for the application
 var VersionFlag Flag = &BoolFlag{
-	Name:               "version",
-	Aliases:            []string{"v"},
-	Usage:              "print the version",
-	DisableDefaultText: true,
+	Name:    "version",
+	Aliases: []string{"v"},
+	Usage:   "print the version",
 }
 
 // HelpFlag prints the help for all commands and subcommands.
 // Set to nil to disable the flag.  The subcommand
 // will still be added unless HideHelp or HideHelpCommand is set to true.
 var HelpFlag Flag = &BoolFlag{
-	Name:               "help",
-	Aliases:            []string{"h"},
-	Usage:              "show help",
-	DisableDefaultText: true,
+	Name:    "help",
+	Aliases: []string{"h"},
+	Usage:   "show help",
 }
 
 // FlagStringer converts a flag definition to a string. This is used by help
@@ -93,8 +92,7 @@ func (f FlagsByName) Swap(i, j int) {
 
 // ActionableFlag is an interface that wraps Flag interface and RunAction operation.
 type ActionableFlag interface {
-	Flag
-	RunAction(*Context) error
+	RunAction(context.Context, *Command) error
 }
 
 // Flag is a common interface related to parsing flags in cli.
@@ -102,24 +100,26 @@ type ActionableFlag interface {
 // this interface be implemented.
 type Flag interface {
 	fmt.Stringer
+
 	// Apply Flag settings to the given flag set
 	Apply(*flag.FlagSet) error
+
+	// All possible names for this flag
 	Names() []string
+
+	// Whether the flag has been set or not
 	IsSet() bool
 }
 
 // RequiredFlag is an interface that allows us to mark flags as required
 // it allows flags required flags to be backwards compatible with the Flag interface
 type RequiredFlag interface {
-	Flag
-
+	// whether the flag is a required flag or not
 	IsRequired() bool
 }
 
 // DocGenerationFlag is an interface that allows documentation generation for the flag
 type DocGenerationFlag interface {
-	Flag
-
 	// TakesValue returns true if the flag takes a value, otherwise false
 	TakesValue() bool
 
@@ -137,28 +137,12 @@ type DocGenerationFlag interface {
 	GetEnvVars() []string
 }
 
-// DocGenerationSliceFlag extends DocGenerationFlag for slice-based flags.
-type DocGenerationSliceFlag interface {
+// DocGenerationMultiValueFlag extends DocGenerationFlag for slice/map based flags.
+type DocGenerationMultiValueFlag interface {
 	DocGenerationFlag
 
-	// IsSliceFlag returns true for flags that can be given multiple times.
-	IsSliceFlag() bool
-}
-
-// VisibleFlag is an interface that allows to check if a flag is visible
-type VisibleFlag interface {
-	Flag
-
-	// IsVisible returns true if the flag is not hidden, otherwise false
-	IsVisible() bool
-}
-
-// CategorizableFlag is an interface that allows us to potentially
-// use a flag in a categorized representation.
-type CategorizableFlag interface {
-	VisibleFlag
-
-	GetCategory() string
+	// IsMultiValueFlag returns true for flags that can be given multiple times.
+	IsMultiValueFlag() bool
 }
 
 // Countable is an interface to enable detection of flag values which support
@@ -167,18 +151,39 @@ type Countable interface {
 	Count() int
 }
 
-func flagSet(name string, flags []Flag, spec separatorSpec) (*flag.FlagSet, error) {
+// VisibleFlag is an interface that allows to check if a flag is visible
+type VisibleFlag interface {
+	// IsVisible returns true if the flag is not hidden, otherwise false
+	IsVisible() bool
+}
+
+// CategorizableFlag is an interface that allows us to potentially
+// use a flag in a categorized representation.
+type CategorizableFlag interface {
+	// Returns the category of the flag
+	GetCategory() string
+
+	// Sets the category of the flag
+	SetCategory(string)
+}
+
+// PersistentFlag is an interface to enable detection of flags which are persistent
+// through subcommands
+type PersistentFlag interface {
+	IsPersistent() bool
+}
+
+func newFlagSet(name string, flags []Flag) (*flag.FlagSet, error) {
 	set := flag.NewFlagSet(name, flag.ContinueOnError)
 
 	for _, f := range flags {
-		if c, ok := f.(customizedSeparator); ok {
-			c.WithSeparatorSpec(spec)
-		}
 		if err := f.Apply(set); err != nil {
 			return nil, err
 		}
 	}
+
 	set.SetOutput(io.Discard)
+
 	return set, nil
 }
 
@@ -342,20 +347,15 @@ func stringifyFlag(f Flag) string {
 
 	defaultValueString := ""
 
-	// set default text for all flags except bool flags
-	// for bool flags display default text if DisableDefaultText is not
-	// set
-	if bf, ok := f.(*BoolFlag); !ok || !bf.DisableDefaultText {
-		if s := df.GetDefaultText(); s != "" {
-			defaultValueString = fmt.Sprintf(formatDefault("%s"), s)
-		}
+	if s := df.GetDefaultText(); s != "" {
+		defaultValueString = fmt.Sprintf(formatDefault("%s"), s)
 	}
 
 	usageWithDefault := strings.TrimSpace(usage + defaultValueString)
 
-	pn := prefixedNames(df.Names(), placeholder)
-	sliceFlag, ok := f.(DocGenerationSliceFlag)
-	if ok && sliceFlag.IsSliceFlag() {
+	pn := prefixedNames(f.Names(), placeholder)
+	sliceFlag, ok := f.(DocGenerationMultiValueFlag)
+	if ok && sliceFlag.IsMultiValueFlag() {
 		pn = pn + " [ " + pn + " ]"
 	}
 
@@ -372,48 +372,10 @@ func hasFlag(flags []Flag, fl Flag) bool {
 	return false
 }
 
-// Return the first value from a list of environment variables and files
-// (which may or may not exist), a description of where the value was found,
-// and a boolean which is true if a value was found.
-func flagFromEnvOrFile(envVars []string, filePath string) (value string, fromWhere string, found bool) {
-	for _, envVar := range envVars {
-		envVar = strings.TrimSpace(envVar)
-		if value, found := syscall.Getenv(envVar); found {
-			return value, fmt.Sprintf("environment variable %q", envVar), true
-		}
-	}
-	for _, fileVar := range strings.Split(filePath, ",") {
-		if fileVar != "" {
-			if data, err := os.ReadFile(fileVar); err == nil {
-				return string(data), fmt.Sprintf("file %q", filePath), true
-			}
-		}
-	}
-	return "", "", false
-}
-
-type customizedSeparator interface {
-	WithSeparatorSpec(separatorSpec)
-}
-
-type separatorSpec struct {
-	sep        string
-	disabled   bool
-	customized bool
-}
-
-func (s separatorSpec) flagSplitMultiValues(val string) []string {
-	var (
-		disabled bool   = s.disabled
-		sep      string = s.sep
-	)
-	if !s.customized {
-		disabled = disableSliceFlagSeparator
-		sep = defaultSliceFlagSeparator
-	}
-	if disabled {
+func flagSplitMultiValues(val string) []string {
+	if disableSliceFlagSeparator {
 		return []string{val}
 	}
 
-	return strings.Split(val, sep)
+	return strings.Split(val, defaultSliceFlagSeparator)
 }

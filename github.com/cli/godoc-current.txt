@@ -1,18 +1,18 @@
-package cli // import "github.com/urfave/cli/v2"
+package cli // import "github.com/urfave/cli/v3"
 
 Package cli provides a minimal framework for creating and organizing command
 line Go applications. cli is designed to be easy to understand and write,
 the most simple cli application can be written as follows:
 
     func main() {
-    	(&cli.App{}).Run(os.Args)
+    	(&cli.Command{}).Run(context.Background(), os.Args)
     }
 
 Of course this application does not do much, so let's make this an actual
 application:
 
     func main() {
-    	app := &cli.App{
+    	cmd := &cli.Command{
       		Name: "greet",
       		Usage: "say a greeting",
       		Action: func(c *cli.Context) error {
@@ -21,44 +21,16 @@ application:
       		},
     	}
 
-    	app.Run(os.Args)
+    	cmd.Run(context.Background(), os.Args)
     }
 
 VARIABLES
 
 var (
-	SuggestFlag               SuggestFlagFunc    = nil // initialized in suggestions.go unless built with urfave_cli_no_suggest
-	SuggestCommand            SuggestCommandFunc = nil // initialized in suggestions.go unless built with urfave_cli_no_suggest
+	SuggestFlag               SuggestFlagFunc    = suggestFlag
+	SuggestCommand            SuggestCommandFunc = suggestCommand
 	SuggestDidYouMeanTemplate string             = suggestDidYouMeanTemplate
 )
-var AppHelpTemplate = `NAME:
-   {{template "helpNameTemplate" .}}
-
-USAGE:
-   {{if .UsageText}}{{wrap .UsageText 3}}{{else}}{{.HelpName}} {{if .VisibleFlags}}[global options]{{end}}{{if .Commands}} command [command options]{{end}} {{if .ArgsUsage}}{{.ArgsUsage}}{{else}}{{if .Args}}[arguments...]{{end}}{{end}}{{end}}{{if .Version}}{{if not .HideVersion}}
-
-VERSION:
-   {{.Version}}{{end}}{{end}}{{if .Description}}
-
-DESCRIPTION:
-   {{template "descriptionTemplate" .}}{{end}}
-{{- if len .Authors}}
-
-AUTHOR{{template "authorsTemplate" .}}{{end}}{{if .VisibleCommands}}
-
-COMMANDS:{{template "visibleCommandCategoryTemplate" .}}{{end}}{{if .VisibleFlagCategories}}
-
-GLOBAL OPTIONS:{{template "visibleFlagCategoryTemplate" .}}{{else if .VisibleFlags}}
-
-GLOBAL OPTIONS:{{template "visibleFlagTemplate" .}}{{end}}{{if .Copyright}}
-
-COPYRIGHT:
-   {{template "copyrightTemplate" .}}{{end}}
-`
-    AppHelpTemplate is the text template for the Default help topic. cli.go
-    uses text/template to render templates. You can render custom help text by
-    setting this variable.
-
 var CommandHelpTemplate = `NAME:
    {{template "helpNameTemplate" .}}
 
@@ -79,13 +51,16 @@ OPTIONS:{{template "visibleFlagTemplate" .}}{{end}}
     uses text/template to render templates. You can render custom help text by
     setting this variable.
 
+var (
+	DefaultInverseBoolPrefix = "no-"
+)
 var ErrWriter io.Writer = os.Stderr
     ErrWriter is used to write errors to the user. This can be anything
     implementing the io.Writer interface and defaults to os.Stderr.
 
-var FishCompletionTemplate = `# {{ .App.Name }} fish shell completion
+var FishCompletionTemplate = `# {{ .Command.Name }} fish shell completion
 
-function __fish_{{ .App.Name }}_no_subcommand --description 'Test if there has been any subcommand yet'
+function __fish_{{ .Command.Name }}_no_subcommand --description 'Test if there has been any subcommand yet'
     for i in (commandline -opc)
         if contains -- $i{{ range $v := .AllCommands }} {{ $v }}{{ end }}
             return 1
@@ -96,52 +71,56 @@ end
 
 {{ range $v := .Completions }}{{ $v }}
 {{ end }}`
-var MarkdownDocTemplate = `{{if gt .SectionNum 0}}% {{ .App.Name }} {{ .SectionNum }}
-
-{{end}}# NAME
-
-{{ .App.Name }}{{ if .App.Usage }} - {{ .App.Usage }}{{ end }}
-
-# SYNOPSIS
-
-{{ .App.Name }}
-{{ if .SynopsisArgs }}
-` + "```" + `
-{{ range $v := .SynopsisArgs }}{{ $v }}{{ end }}` + "```" + `
-{{ end }}{{ if .App.Description }}
-# DESCRIPTION
-
-{{ .App.Description }}
-{{ end }}
-**Usage**:
-
-` + "```" + `{{ if .App.UsageText }}
-{{ .App.UsageText }}
-{{ else }}
-{{ .App.Name }} [GLOBAL OPTIONS] command [COMMAND OPTIONS] [ARGUMENTS...]
-{{ end }}` + "```" + `
-{{ if .GlobalArgs }}
-# GLOBAL OPTIONS
-{{ range $v := .GlobalArgs }}
-{{ $v }}{{ end }}
-{{ end }}{{ if .Commands }}
-# COMMANDS
-{{ range $v := .Commands }}
-{{ $v }}{{ end }}{{ end }}`
+var NewFloatSlice = NewSliceBase[float64, NoConfig, floatValue]
+var NewIntSlice = NewSliceBase[int64, IntegerConfig, intValue]
+var NewStringMap = NewMapBase[string, StringConfig, stringValue]
+var NewStringSlice = NewSliceBase[string, StringConfig, stringValue]
+var NewUintSlice = NewSliceBase[uint64, IntegerConfig, uintValue]
 var OsExiter = os.Exit
     OsExiter is the function used when the app exits. If not set defaults to
     os.Exit.
+
+var RootCommandHelpTemplate = `NAME:
+   {{template "helpNameTemplate" .}}
+
+USAGE:
+   {{if .UsageText}}{{wrap .UsageText 3}}{{else}}{{.FullName}} {{if .VisibleFlags}}[global options]{{end}}{{if .VisibleCommands}} [command [command options]]{{end}} {{if .ArgsUsage}}{{.ArgsUsage}}{{else}}[arguments...]{{end}}{{end}}{{if .Version}}{{if not .HideVersion}}
+
+VERSION:
+   {{.Version}}{{end}}{{end}}{{if .Description}}
+
+DESCRIPTION:
+   {{template "descriptionTemplate" .}}{{end}}
+{{- if len .Authors}}
+
+AUTHOR{{template "authorsTemplate" .}}{{end}}{{if .VisibleCommands}}
+
+COMMANDS:{{template "visibleCommandCategoryTemplate" .}}{{end}}{{if .VisibleFlagCategories}}
+
+GLOBAL OPTIONS:{{template "visibleFlagCategoryTemplate" .}}{{else if .VisibleFlags}}
+
+GLOBAL OPTIONS:{{template "visibleFlagTemplate" .}}{{end}}{{if .Copyright}}
+
+COPYRIGHT:
+   {{template "copyrightTemplate" .}}{{end}}
+`
+    RootCommandHelpTemplate is the text template for the Default help topic.
+    cli.go uses text/template to render templates. You can render custom help
+    text by setting this variable.
 
 var SubcommandHelpTemplate = `NAME:
    {{template "helpNameTemplate" .}}
 
 USAGE:
-   {{if .UsageText}}{{wrap .UsageText 3}}{{else}}{{.HelpName}} {{if .VisibleFlags}}command [command options]{{end}} {{if .ArgsUsage}}{{.ArgsUsage}}{{else}}{{if .Args}}[arguments...]{{end}}{{end}}{{end}}{{if .Description}}
+   {{if .UsageText}}{{wrap .UsageText 3}}{{else}}{{.FullName}} {{if .VisibleCommands}}[command [command options]] {{end}}{{if .ArgsUsage}}{{.ArgsUsage}}{{else}}[arguments...]{{end}}{{end}}{{if .Category}}
+
+CATEGORY:
+   {{.Category}}{{end}}{{if .Description}}
 
 DESCRIPTION:
    {{template "descriptionTemplate" .}}{{end}}{{if .VisibleCommands}}
 
-COMMANDS:{{template "visibleCommandCategoryTemplate" .}}{{end}}{{if .VisibleFlagCategories}}
+COMMANDS:{{template "visibleCommandTemplate" .}}{{end}}{{if .VisibleFlagCategories}}
 
 OPTIONS:{{template "visibleFlagCategoryTemplate" .}}{{else if .VisibleFlags}}
 
@@ -177,17 +156,12 @@ var HelpPrinterCustom helpPrinterCustom = printHelpCustom
 
 FUNCTIONS
 
-func DefaultAppComplete(cCtx *Context)
+func DefaultAppComplete(ctx context.Context, cmd *Command)
     DefaultAppComplete prints the list of subcommands as the default app
     completion method
 
-func DefaultCompleteWithFlags(cmd *Command) func(cCtx *Context)
+func DefaultCompleteWithFlags(cmd *Command) func(ctx context.Context, cmd *Command)
 func FlagNames(name string, aliases []string) []string
-func HandleAction(action interface{}, cCtx *Context) (err error)
-    HandleAction attempts to figure out which Action signature was used.
-    If it's an ActionFunc or a func with the legacy signature for Action,
-    the func is run!
-
 func HandleExitCoder(err error)
     HandleExitCoder handles errors implementing ExitCoder by printing their
     message and calling OsExiter with the given exit code.
@@ -198,209 +172,44 @@ func HandleExitCoder(err error)
 
     This function is the default error-handling behavior for an App.
 
-func ShowAppHelp(cCtx *Context) error
+func ShowAppHelp(cmd *Command) error
     ShowAppHelp is an action that displays the help.
 
-func ShowAppHelpAndExit(c *Context, exitCode int)
+func ShowAppHelpAndExit(cmd *Command, exitCode int)
     ShowAppHelpAndExit - Prints the list of subcommands for the app and exits
     with exit code.
 
-func ShowCommandCompletions(ctx *Context, command string)
-    ShowCommandCompletions prints the custom completions for a given command
-
-func ShowCommandHelp(ctx *Context, command string) error
+func ShowCommandHelp(ctx context.Context, cmd *Command, commandName string) error
     ShowCommandHelp prints help for the given command
 
-func ShowCommandHelpAndExit(c *Context, command string, code int)
+func ShowCommandHelpAndExit(ctx context.Context, cmd *Command, command string, code int)
     ShowCommandHelpAndExit - exits with code after showing help
 
-func ShowCompletions(cCtx *Context)
-    ShowCompletions prints the lists of commands within a given context
-
-func ShowSubcommandHelp(cCtx *Context) error
+func ShowSubcommandHelp(cmd *Command) error
     ShowSubcommandHelp prints help for the given subcommand
 
-func ShowSubcommandHelpAndExit(c *Context, exitCode int)
+func ShowSubcommandHelpAndExit(cmd *Command, exitCode int)
     ShowSubcommandHelpAndExit - Prints help for the given subcommand and exits
     with exit code.
 
-func ShowVersion(cCtx *Context)
+func ShowVersion(cmd *Command)
     ShowVersion prints the version number of the App
 
 
 TYPES
 
-type ActionFunc func(*Context) error
+type ActionFunc func(context.Context, *Command) error
     ActionFunc is the action to execute when no subcommands are specified
 
 type ActionableFlag interface {
-	Flag
-	RunAction(*Context) error
+	RunAction(context.Context, *Command) error
 }
     ActionableFlag is an interface that wraps Flag interface and RunAction
     operation.
 
-type AfterFunc func(*Context) error
-    AfterFunc is an action to execute after any subcommands are run, but after
-    the subcommand has finished it is run even if Action() panics
-
-type App struct {
-	// The name of the program. Defaults to path.Base(os.Args[0])
-	Name string
-	// Full name of command for help, defaults to Name
-	HelpName string
-	// Description of the program.
-	Usage string
-	// Text to override the USAGE section of help
-	UsageText string
-	// Whether this command supports arguments
-	Args bool
-	// Description of the program argument format.
-	ArgsUsage string
-	// Version of the program
-	Version string
-	// Description of the program
-	Description string
-	// DefaultCommand is the (optional) name of a command
-	// to run if no command names are passed as CLI arguments.
-	DefaultCommand string
-	// List of commands to execute
-	Commands []*Command
-	// List of flags to parse
-	Flags []Flag
-	// Boolean to enable bash completion commands
-	EnableBashCompletion bool
-	// Boolean to hide built-in help command and help flag
-	HideHelp bool
-	// Boolean to hide built-in help command but keep help flag.
-	// Ignored if HideHelp is true.
-	HideHelpCommand bool
-	// Boolean to hide built-in version flag and the VERSION section of help
-	HideVersion bool
-
-	// An action to execute when the shell completion flag is set
-	BashComplete BashCompleteFunc
-	// An action to execute before any subcommands are run, but after the context is ready
-	// If a non-nil error is returned, no subcommands are run
-	Before BeforeFunc
-	// An action to execute after any subcommands are run, but after the subcommand has finished
-	// It is run even if Action() panics
-	After AfterFunc
-	// The action to execute when no subcommands are specified
-	Action ActionFunc
-	// Execute this function if the proper command cannot be found
-	CommandNotFound CommandNotFoundFunc
-	// Execute this function if a usage error occurs
-	OnUsageError OnUsageErrorFunc
-	// Execute this function when an invalid flag is accessed from the context
-	InvalidFlagAccessHandler InvalidFlagAccessFunc
-	// Compilation date
-	Compiled time.Time
-	// List of all authors who contributed
-	Authors []*Author
-	// Copyright of the binary if any
-	Copyright string
-	// Reader reader to write input to (useful for tests)
-	Reader io.Reader
-	// Writer writer to write output to
-	Writer io.Writer
-	// ErrWriter writes error output
-	ErrWriter io.Writer
-	// ExitErrHandler processes any error encountered while running an App before
-	// it is returned to the caller. If no function is provided, HandleExitCoder
-	// is used as the default behavior.
-	ExitErrHandler ExitErrHandlerFunc
-	// Other custom info
-	Metadata map[string]interface{}
-	// Carries a function which returns app specific info.
-	ExtraInfo func() map[string]string
-	// CustomAppHelpTemplate the text template for app help topic.
-	// cli.go uses text/template to render templates. You can
-	// render custom help text by setting this variable.
-	CustomAppHelpTemplate string
-	// SliceFlagSeparator is used to customize the separator for SliceFlag, the default is ","
-	SliceFlagSeparator string
-	// DisableSliceFlagSeparator is used to disable SliceFlagSeparator, the default is false
-	DisableSliceFlagSeparator bool
-	// Boolean to enable short-option handling so user can combine several
-	// single-character bool arguments into one
-	// i.e. foobar -o -v -> foobar -ov
-	UseShortOptionHandling bool
-	// Enable suggestions for commands and flags
-	Suggest bool
-	// Allows global flags set by libraries which use flag.XXXVar(...) directly
-	// to be parsed through this library
-	AllowExtFlags bool
-	// Treat all flags as normal arguments if true
-	SkipFlagParsing bool
-
-	// Has unexported fields.
-}
-    App is the main structure of a cli application. It is recommended that an
-    app be created with the cli.NewApp() function
-
-func NewApp() *App
-    NewApp creates a new cli Application with some reasonable defaults for Name,
-    Usage, Version and Action.
-
-func (a *App) Command(name string) *Command
-    Command returns the named command on App. Returns nil if the command does
-    not exist
-
-func (a *App) Run(arguments []string) (err error)
-    Run is the entry point to the cli app. Parses the arguments slice and routes
-    to the proper flag/args combination
-
-func (a *App) RunAndExitOnError()
-    RunAndExitOnError calls .Run() and exits non-zero if an error was returned
-
-    Deprecated: instead you should return an error that fulfills cli.ExitCoder
-    to cli.App.Run. This will cause the application to exit with the given error
-    code in the cli.ExitCoder
-
-func (a *App) RunAsSubcommand(ctx *Context) (err error)
-    RunAsSubcommand is for legacy/compatibility purposes only. New code should
-    only use App.RunContext. This function is slated to be removed in v3.
-
-func (a *App) RunContext(ctx context.Context, arguments []string) (err error)
-    RunContext is like Run except it takes a Context that will be passed to
-    its commands and sub-commands. Through this, you can propagate timeouts and
-    cancellation requests
-
-func (a *App) Setup()
-    Setup runs initialization code to ensure all data structures are ready
-    for `Run` or inspection prior to `Run`. It is internally called by `Run`,
-    but will return early if setup has already happened.
-
-func (a *App) ToFishCompletion() (string, error)
-    ToFishCompletion creates a fish completion string for the `*App` The
-    function errors if either parsing or writing of the string fails.
-
-func (a *App) ToMan() (string, error)
-    ToMan creates a man page string for the `*App` The function errors if either
-    parsing or writing of the string fails.
-
-func (a *App) ToManWithSection(sectionNumber int) (string, error)
-    ToMan creates a man page string with section number for the `*App` The
-    function errors if either parsing or writing of the string fails.
-
-func (a *App) ToMarkdown() (string, error)
-    ToMarkdown creates a markdown string for the `*App` The function errors if
-    either parsing or writing of the string fails.
-
-func (a *App) VisibleCategories() []CommandCategory
-    VisibleCategories returns a slice of categories and commands that are
-    Hidden=false
-
-func (a *App) VisibleCommands() []*Command
-    VisibleCommands returns a slice of the Commands with Hidden=false
-
-func (a *App) VisibleFlagCategories() []VisibleFlagCategory
-    VisibleFlagCategories returns a slice containing all the categories with the
-    flags they contain
-
-func (a *App) VisibleFlags() []Flag
-    VisibleFlags returns a slice of the Flags with Hidden=false
+type AfterFunc func(context.Context, *Command) error
+    AfterFunc is an action that executes after any subcommands are run and have
+    finished. The AfterFunc is run even if Action() panics.
 
 type Args interface {
 	// Get returns the nth argument, or else a blank string
@@ -418,188 +227,293 @@ type Args interface {
 	Slice() []string
 }
 
-type Author struct {
-	Name  string // The Authors name
-	Email string // The Authors email
+type Argument interface {
+	Parse([]string) ([]string, error)
+	Usage() string
 }
-    Author represents someone who has contributed to a cli project.
 
-func (a *Author) String() string
-    String makes Author comply to the Stringer interface, to allow an easy print
-    in the templating process
+type ArgumentBase[T any, C any, VC ValueCreator[T, C]] struct {
+	Name        string `json:"name"`      // the name of this argument
+	Value       T      `json:"value"`     // the default value of this argument
+	Destination *T     `json:"-"`         // the destination point for this argument
+	Values      *[]T   `json:"-"`         // all the values of this argument, only if multiple are supported
+	UsageText   string `json:"usageText"` // the usage text to show
+	Min         int    `json:"minTimes"`  // the min num of occurrences of this argument
+	Max         int    `json:"maxTimes"`  // the max num of occurrences of this argument, set to -1 for unlimited
+	Config      C      `json:"config"`    // config for this argument similar to Flag Config
+}
 
-type BashCompleteFunc func(*Context)
-    BashCompleteFunc is an action to execute when the shell completion flag is
-    set
+func (a *ArgumentBase[T, C, VC]) Parse(s []string) ([]string, error)
 
-type BeforeFunc func(*Context) error
-    BeforeFunc is an action to execute before any subcommands are run, but after
-    the context is ready if a non-nil error is returned, no subcommands are run
+func (a *ArgumentBase[T, C, VC]) Usage() string
 
-type BoolFlag struct {
-	Name string
+type BeforeFunc func(context.Context, *Command) error
+    BeforeFunc is an action that executes prior to any subcommands being run
+    once the context is ready. If a non-nil error is returned, no subcommands
+    are run.
 
-	Category    string
-	DefaultText string
-	FilePath    string
-	Usage       string
-
-	Required   bool
-	Hidden     bool
-	HasBeenSet bool
-
-	Value       bool
-	Destination *bool
-
-	Aliases []string
-	EnvVars []string
-
+type BoolConfig struct {
 	Count *int
+}
+    BoolConfig defines the configuration for bool flags
 
-	DisableDefaultText bool
+type BoolFlag = FlagBase[bool, BoolConfig, boolValue]
 
-	Action func(*Context, bool) error
+type BoolWithInverseFlag struct {
+	// The BoolFlag which the positive and negative flags are generated from
+	*BoolFlag
+
+	// The prefix used to indicate a negative value
+	// Default: `env` becomes `no-env`
+	InversePrefix string
+
 	// Has unexported fields.
 }
-    BoolFlag is a flag with type bool
 
-func (f *BoolFlag) Apply(set *flag.FlagSet) error
-    Apply populates the flag given the flag set and environment
+func (s *BoolWithInverseFlag) Apply(set *flag.FlagSet) error
 
-func (f *BoolFlag) Get(ctx *Context) bool
-    Get returns the flag’s value in the given Context.
+func (s *BoolWithInverseFlag) Flags() []Flag
 
-func (f *BoolFlag) GetCategory() string
-    GetCategory returns the category for the flag
+func (s *BoolWithInverseFlag) IsSet() bool
 
-func (f *BoolFlag) GetDefaultText() string
-    GetDefaultText returns the default text for this flag
+func (s *BoolWithInverseFlag) Names() []string
 
-func (f *BoolFlag) GetEnvVars() []string
-    GetEnvVars returns the env vars for this flag
+func (s *BoolWithInverseFlag) RunAction(ctx context.Context, cmd *Command) error
 
-func (f *BoolFlag) GetUsage() string
-    GetUsage returns the usage string for the flag
+func (s *BoolWithInverseFlag) String() string
+    Example for BoolFlag{Name: "env"} --env (default: false) || --no-env
+    (default: false)
 
-func (f *BoolFlag) GetValue() string
-    GetValue returns the flags value as string representation and an empty
-    string if the flag takes no value at all.
-
-func (f *BoolFlag) IsRequired() bool
-    IsRequired returns whether or not the flag is required
-
-func (f *BoolFlag) IsSet() bool
-    IsSet returns whether or not the flag has been set through env or file
-
-func (f *BoolFlag) IsVisible() bool
-    IsVisible returns true if the flag is not hidden, otherwise false
-
-func (f *BoolFlag) Names() []string
-    Names returns the names of the flag
-
-func (f *BoolFlag) RunAction(c *Context) error
-    RunAction executes flag action if set
-
-func (f *BoolFlag) String() string
-    String returns a readable representation of this value (for usage defaults)
-
-func (f *BoolFlag) TakesValue() bool
-    TakesValue returns true of the flag takes a value, otherwise false
+func (s *BoolWithInverseFlag) Value() bool
 
 type CategorizableFlag interface {
-	VisibleFlag
-
+	// Returns the category of the flag
 	GetCategory() string
+
+	// Sets the category of the flag
+	SetCategory(string)
 }
     CategorizableFlag is an interface that allows us to potentially use a flag
     in a categorized representation.
 
 type Command struct {
 	// The name of the command
-	Name string
+	Name string `json:"name"`
 	// A list of aliases for the command
-	Aliases []string
+	Aliases []string `json:"aliases"`
 	// A short description of the usage of this command
-	Usage string
-	// Custom text to show on USAGE section of help
-	UsageText string
-	// A longer explanation of how the command works
-	Description string
-	// Whether this command supports arguments
-	Args bool
+	Usage string `json:"usage"`
+	// Text to override the USAGE section of help
+	UsageText string `json:"usageText"`
 	// A short description of the arguments of this command
-	ArgsUsage string
+	ArgsUsage string `json:"argsUsage"`
+	// Version of the command
+	Version string `json:"version"`
+	// Longer explanation of how the command works
+	Description string `json:"description"`
+	// DefaultCommand is the (optional) name of a command
+	// to run if no command names are passed as CLI arguments.
+	DefaultCommand string `json:"defaultCommand"`
 	// The category the command is part of
-	Category string
-	// The function to call when checking for bash command completions
-	BashComplete BashCompleteFunc
-	// An action to execute before any sub-subcommands are run, but after the context is ready
-	// If a non-nil error is returned, no sub-subcommands are run
-	Before BeforeFunc
+	Category string `json:"category"`
+	// List of child commands
+	Commands []*Command `json:"commands"`
+	// List of flags to parse
+	Flags []Flag `json:"flags"`
+	// Boolean to hide built-in help command and help flag
+	HideHelp bool `json:"hideHelp"`
+	// Ignored if HideHelp is true.
+	HideHelpCommand bool `json:"hideHelpCommand"`
+	// Boolean to hide built-in version flag and the VERSION section of help
+	HideVersion bool `json:"hideVersion"`
+	// Boolean to enable shell completion commands
+	EnableShellCompletion bool `json:"-"`
+	// Shell Completion generation command name
+	ShellCompletionCommandName string `json:"-"`
+	// The function to call when checking for shell command completions
+	ShellComplete ShellCompleteFunc `json:"-"`
+	// An action to execute before any subcommands are run, but after the context is ready
+	// If a non-nil error is returned, no subcommands are run
+	Before BeforeFunc `json:"-"`
 	// An action to execute after any subcommands are run, but after the subcommand has finished
 	// It is run even if Action() panics
-	After AfterFunc
+	After AfterFunc `json:"-"`
 	// The function to call when this command is invoked
-	Action ActionFunc
+	Action ActionFunc `json:"-"`
+	// Execute this function if the proper command cannot be found
+	CommandNotFound CommandNotFoundFunc `json:"-"`
 	// Execute this function if a usage error occurs.
-	OnUsageError OnUsageErrorFunc
-	// List of child commands
-	Subcommands []*Command
-	// List of flags to parse
-	Flags []Flag
-
-	// Treat all flags as normal arguments if true
-	SkipFlagParsing bool
-	// Boolean to hide built-in help command and help flag
-	HideHelp bool
-	// Boolean to hide built-in help command but keep help flag
-	// Ignored if HideHelp is true.
-	HideHelpCommand bool
+	OnUsageError OnUsageErrorFunc `json:"-"`
+	// Execute this function when an invalid flag is accessed from the context
+	InvalidFlagAccessHandler InvalidFlagAccessFunc `json:"-"`
 	// Boolean to hide this command from help or completion
-	Hidden bool
+	Hidden bool `json:"hidden"`
+	// List of all authors who contributed (string or fmt.Stringer)
+	// TODO: ~string | fmt.Stringer when interface unions are available
+	Authors []any `json:"authors"`
+	// Copyright of the binary if any
+	Copyright string `json:"copyright"`
+	// Reader reader to write input to (useful for tests)
+	Reader io.Reader `json:"-"`
+	// Writer writer to write output to
+	Writer io.Writer `json:"-"`
+	// ErrWriter writes error output
+	ErrWriter io.Writer `json:"-"`
+	// ExitErrHandler processes any error encountered while running an App before
+	// it is returned to the caller. If no function is provided, HandleExitCoder
+	// is used as the default behavior.
+	ExitErrHandler ExitErrHandlerFunc `json:"-"`
+	// Other custom info
+	Metadata map[string]interface{} `json:"metadata"`
+	// Carries a function which returns app specific info.
+	ExtraInfo func() map[string]string `json:"-"`
+	// CustomRootCommandHelpTemplate the text template for app help topic.
+	// cli.go uses text/template to render templates. You can
+	// render custom help text by setting this variable.
+	CustomRootCommandHelpTemplate string `json:"-"`
+	// SliceFlagSeparator is used to customize the separator for SliceFlag, the default is ","
+	SliceFlagSeparator string `json:"sliceFlagSeparator"`
+	// DisableSliceFlagSeparator is used to disable SliceFlagSeparator, the default is false
+	DisableSliceFlagSeparator bool `json:"disableSliceFlagSeparator"`
 	// Boolean to enable short-option handling so user can combine several
 	// single-character bool arguments into one
 	// i.e. foobar -o -v -> foobar -ov
-	UseShortOptionHandling bool
-
-	// Full name of command for help, defaults to full command name, including parent commands.
-	HelpName string
-
+	UseShortOptionHandling bool `json:"useShortOptionHandling"`
+	// Enable suggestions for commands and flags
+	Suggest bool `json:"suggest"`
+	// Allows global flags set by libraries which use flag.XXXVar(...) directly
+	// to be parsed through this library
+	AllowExtFlags bool `json:"allowExtFlags"`
+	// Treat all flags as normal arguments if true
+	SkipFlagParsing bool `json:"skipFlagParsing"`
 	// CustomHelpTemplate the text template for the command help topic.
 	// cli.go uses text/template to render templates. You can
 	// render custom help text by setting this variable.
-	CustomHelpTemplate string
+	CustomHelpTemplate string `json:"-"`
+	// Use longest prefix match for commands
+	PrefixMatchCommands bool `json:"prefixMatchCommands"`
+	// Custom suggest command for matching
+	SuggestCommandFunc SuggestCommandFunc `json:"-"`
+	// Flag exclusion group
+	MutuallyExclusiveFlags []MutuallyExclusiveFlags `json:"mutuallyExclusiveFlags"`
+	// Arguments to parse for this command
+	Arguments []Argument `json:"arguments"`
+	// Whether to read arguments from stdin
+	// applicable to root command only
+	ReadArgsFromStdin bool `json:"readArgsFromStdin"`
 
 	// Has unexported fields.
 }
-    Command is a subcommand for a cli.App.
+    Command contains everything needed to run an application that accepts a
+    string slice of arguments such as os.Args. A given Command may contain Flags
+    and sub-commands in Commands.
+
+func (cmd *Command) Args() Args
+    Args returns the command line arguments associated with the command.
+
+func (cmd *Command) Bool(name string) bool
 
 func (cmd *Command) Command(name string) *Command
 
-func (c *Command) FullName() string
-    FullName returns the full name of the command. For subcommands this ensures
-    that parent commands are part of the command path
+func (cmd *Command) Count(name string) int
+    Count returns the num of occurrences of this flag
 
-func (c *Command) HasName(name string) bool
+func (cmd *Command) Duration(name string) time.Duration
+
+func (cmd *Command) FlagNames() []string
+    FlagNames returns a slice of flag names used by the this command and all of
+    its parent commands.
+
+func (cmd *Command) Float(name string) float64
+    Int looks up the value of a local IntFlag, returns 0 if not found
+
+func (cmd *Command) FloatSlice(name string) []float64
+    FloatSlice looks up the value of a local FloatSliceFlag, returns nil if not
+    found
+
+func (cmd *Command) FullName() string
+    FullName returns the full name of the command. For commands with parents
+    this ensures that the parent commands are part of the command path.
+
+func (cmd *Command) HasName(name string) bool
     HasName returns true if Command.Name matches given name
 
-func (c *Command) Names() []string
+func (cmd *Command) Int(name string) int64
+    Int64 looks up the value of a local Int64Flag, returns 0 if not found
+
+func (cmd *Command) IntSlice(name string) []int64
+    IntSlice looks up the value of a local IntSliceFlag, returns nil if not
+    found
+
+func (cmd *Command) IsSet(name string) bool
+    IsSet determines if the flag was actually set
+
+func (cmd *Command) Lineage() []*Command
+    Lineage returns *this* command and all of its ancestor commands in order
+    from child to parent
+
+func (cmd *Command) LocalFlagNames() []string
+    LocalFlagNames returns a slice of flag names used in this command.
+
+func (cmd *Command) NArg() int
+    NArg returns the number of the command line arguments.
+
+func (cmd *Command) Names() []string
     Names returns the names including short names and aliases.
 
-func (c *Command) Run(cCtx *Context, arguments ...string) (err error)
+func (cmd *Command) NumFlags() int
+    NumFlags returns the number of flags set
 
-func (c *Command) VisibleCategories() []CommandCategory
+func (cmd *Command) Root() *Command
+    Root returns the Command at the root of the graph
+
+func (cmd *Command) Run(ctx context.Context, osArgs []string) (deferErr error)
+    Run is the entry point to the command graph. The positional arguments are
+    parsed according to the Flag and Command definitions and the matching Action
+    functions are run.
+
+func (cmd *Command) Set(name, value string) error
+    Set sets a context flag to a value.
+
+func (cmd *Command) String(name string) string
+
+func (cmd *Command) StringMap(name string) map[string]string
+    StringMap looks up the value of a local StringMapFlag, returns nil if not
+    found
+
+func (cmd *Command) StringSlice(name string) []string
+    StringSlice looks up the value of a local StringSliceFlag, returns nil if
+    not found
+
+func (cmd *Command) Timestamp(name string) time.Time
+    Timestamp gets the timestamp from a flag name
+
+func (cmd *Command) ToFishCompletion() (string, error)
+    ToFishCompletion creates a fish completion string for the `*App` The
+    function errors if either parsing or writing of the string fails.
+
+func (cmd *Command) Uint(name string) uint64
+    Uint looks up the value of a local Uint64Flag, returns 0 if not found
+
+func (cmd *Command) UintSlice(name string) []uint64
+    UintSlice looks up the value of a local UintSliceFlag, returns nil if not
+    found
+
+func (cmd *Command) Value(name string) interface{}
+    Value returns the value of the flag corresponding to `name`
+
+func (cmd *Command) VisibleCategories() []CommandCategory
     VisibleCategories returns a slice of categories and commands that are
     Hidden=false
 
-func (c *Command) VisibleCommands() []*Command
+func (cmd *Command) VisibleCommands() []*Command
     VisibleCommands returns a slice of the Commands with Hidden=false
 
-func (c *Command) VisibleFlagCategories() []VisibleFlagCategory
+func (cmd *Command) VisibleFlagCategories() []VisibleFlagCategory
     VisibleFlagCategories returns a slice containing all the visible flag
     categories with the flags they contain
 
-func (c *Command) VisibleFlags() []Flag
+func (cmd *Command) VisibleFlags() []Flag
     VisibleFlags returns a slice of the Flags with Hidden=false
 
 type CommandCategories interface {
@@ -618,122 +532,8 @@ type CommandCategory interface {
 }
     CommandCategory is a category containing commands.
 
-type CommandNotFoundFunc func(*Context, string)
+type CommandNotFoundFunc func(context.Context, *Command, string)
     CommandNotFoundFunc is executed if the proper command cannot be found
-
-type Commands []*Command
-
-type CommandsByName []*Command
-
-func (c CommandsByName) Len() int
-
-func (c CommandsByName) Less(i, j int) bool
-
-func (c CommandsByName) Swap(i, j int)
-
-type Context struct {
-	context.Context
-	App     *App
-	Command *Command
-
-	// Has unexported fields.
-}
-    Context is a type that is passed through to each Handler action in a cli
-    application. Context can be used to retrieve context-specific args and
-    parsed command-line options.
-
-func NewContext(app *App, set *flag.FlagSet, parentCtx *Context) *Context
-    NewContext creates a new context. For use in when invoking an App or Command
-    action.
-
-func (cCtx *Context) Args() Args
-    Args returns the command line arguments associated with the context.
-
-func (cCtx *Context) Bool(name string) bool
-    Bool looks up the value of a local BoolFlag, returns false if not found
-
-func (cCtx *Context) Count(name string) int
-    Count returns the num of occurrences of this flag
-
-func (cCtx *Context) Duration(name string) time.Duration
-    Duration looks up the value of a local DurationFlag, returns 0 if not found
-
-func (cCtx *Context) FlagNames() []string
-    FlagNames returns a slice of flag names used by the this context and all of
-    its parent contexts.
-
-func (cCtx *Context) Float64(name string) float64
-    Float64 looks up the value of a local Float64Flag, returns 0 if not found
-
-func (cCtx *Context) Float64Slice(name string) []float64
-    Float64Slice looks up the value of a local Float64SliceFlag, returns nil if
-    not found
-
-func (cCtx *Context) Generic(name string) interface{}
-    Generic looks up the value of a local GenericFlag, returns nil if not found
-
-func (cCtx *Context) Int(name string) int
-    Int looks up the value of a local IntFlag, returns 0 if not found
-
-func (cCtx *Context) Int64(name string) int64
-    Int64 looks up the value of a local Int64Flag, returns 0 if not found
-
-func (cCtx *Context) Int64Slice(name string) []int64
-    Int64Slice looks up the value of a local Int64SliceFlag, returns nil if not
-    found
-
-func (cCtx *Context) IntSlice(name string) []int
-    IntSlice looks up the value of a local IntSliceFlag, returns nil if not
-    found
-
-func (cCtx *Context) IsSet(name string) bool
-    IsSet determines if the flag was actually set
-
-func (cCtx *Context) Lineage() []*Context
-    Lineage returns *this* context and all of its ancestor contexts in order
-    from child to parent
-
-func (cCtx *Context) LocalFlagNames() []string
-    LocalFlagNames returns a slice of flag names used in this context.
-
-func (cCtx *Context) NArg() int
-    NArg returns the number of the command line arguments.
-
-func (cCtx *Context) NumFlags() int
-    NumFlags returns the number of flags set
-
-func (cCtx *Context) Path(name string) string
-    Path looks up the value of a local PathFlag, returns "" if not found
-
-func (cCtx *Context) Set(name, value string) error
-    Set sets a context flag to a value.
-
-func (cCtx *Context) String(name string) string
-    String looks up the value of a local StringFlag, returns "" if not found
-
-func (cCtx *Context) StringSlice(name string) []string
-    StringSlice looks up the value of a local StringSliceFlag, returns nil if
-    not found
-
-func (cCtx *Context) Timestamp(name string) *time.Time
-    Timestamp gets the timestamp from a flag name
-
-func (cCtx *Context) Uint(name string) uint
-    Uint looks up the value of a local UintFlag, returns 0 if not found
-
-func (cCtx *Context) Uint64(name string) uint64
-    Uint64 looks up the value of a local Uint64Flag, returns 0 if not found
-
-func (cCtx *Context) Uint64Slice(name string) []uint64
-    Uint64Slice looks up the value of a local Uint64SliceFlag, returns nil if
-    not found
-
-func (cCtx *Context) UintSlice(name string) []uint
-    UintSlice looks up the value of a local UintSliceFlag, returns nil if not
-    found
-
-func (cCtx *Context) Value(name string) interface{}
-    Value returns the value of the flag corresponding to `name`
 
 type Countable interface {
 	Count() int
@@ -742,8 +542,6 @@ type Countable interface {
     repetitive flags
 
 type DocGenerationFlag interface {
-	Flag
-
 	// TakesValue returns true if the flag takes a value, otherwise false
 	TakesValue() bool
 
@@ -763,79 +561,16 @@ type DocGenerationFlag interface {
     DocGenerationFlag is an interface that allows documentation generation for
     the flag
 
-type DocGenerationSliceFlag interface {
+type DocGenerationMultiValueFlag interface {
 	DocGenerationFlag
 
-	// IsSliceFlag returns true for flags that can be given multiple times.
-	IsSliceFlag() bool
+	// IsMultiValueFlag returns true for flags that can be given multiple times.
+	IsMultiValueFlag() bool
 }
-    DocGenerationSliceFlag extends DocGenerationFlag for slice-based flags.
+    DocGenerationMultiValueFlag extends DocGenerationFlag for slice/map based
+    flags.
 
-type DurationFlag struct {
-	Name string
-
-	Category    string
-	DefaultText string
-	FilePath    string
-	Usage       string
-
-	Required   bool
-	Hidden     bool
-	HasBeenSet bool
-
-	Value       time.Duration
-	Destination *time.Duration
-
-	Aliases []string
-	EnvVars []string
-
-	Action func(*Context, time.Duration) error
-	// Has unexported fields.
-}
-    DurationFlag is a flag with type time.Duration
-
-func (f *DurationFlag) Apply(set *flag.FlagSet) error
-    Apply populates the flag given the flag set and environment
-
-func (f *DurationFlag) Get(ctx *Context) time.Duration
-    Get returns the flag’s value in the given Context.
-
-func (f *DurationFlag) GetCategory() string
-    GetCategory returns the category for the flag
-
-func (f *DurationFlag) GetDefaultText() string
-    GetDefaultText returns the default text for this flag
-
-func (f *DurationFlag) GetEnvVars() []string
-    GetEnvVars returns the env vars for this flag
-
-func (f *DurationFlag) GetUsage() string
-    GetUsage returns the usage string for the flag
-
-func (f *DurationFlag) GetValue() string
-    GetValue returns the flags value as string representation and an empty
-    string if the flag takes no value at all.
-
-func (f *DurationFlag) IsRequired() bool
-    IsRequired returns whether or not the flag is required
-
-func (f *DurationFlag) IsSet() bool
-    IsSet returns whether or not the flag has been set through env or file
-
-func (f *DurationFlag) IsVisible() bool
-    IsVisible returns true if the flag is not hidden, otherwise false
-
-func (f *DurationFlag) Names() []string
-    Names returns the names of the flag
-
-func (f *DurationFlag) RunAction(c *Context) error
-    RunAction executes flag action if set
-
-func (f *DurationFlag) String() string
-    String returns a readable representation of this value (for usage defaults)
-
-func (f *DurationFlag) TakesValue() bool
-    TakesValue returns true of the flag takes a value, otherwise false
+type DurationFlag = FlagBase[time.Duration, NoConfig, durationValue]
 
 type ErrorFormatter interface {
 	Format(s fmt.State, verb rune)
@@ -858,50 +593,126 @@ func Exit(message interface{}, exitCode int) ExitCoder
     can be avoided by overriding the ExitErrHandler function on an App or the
     package-global OsExiter function.
 
-func NewExitError(message interface{}, exitCode int) ExitCoder
-    NewExitError calls Exit to create a new ExitCoder.
-
-    Deprecated: This function is a duplicate of Exit and will eventually be
-    removed.
-
-type ExitErrHandlerFunc func(cCtx *Context, err error)
+type ExitErrHandlerFunc func(context.Context, *Command, error)
     ExitErrHandlerFunc is executed if provided in order to handle exitError
     values returned by Actions and Before/After functions.
 
 type Flag interface {
 	fmt.Stringer
+
 	// Apply Flag settings to the given flag set
 	Apply(*flag.FlagSet) error
+
+	// All possible names for this flag
 	Names() []string
+
+	// Whether the flag has been set or not
 	IsSet() bool
 }
     Flag is a common interface related to parsing flags in cli. For more
     advanced flag parsing techniques, it is recommended that this interface be
     implemented.
 
-var BashCompletionFlag Flag = &BoolFlag{
-	Name:   "generate-bash-completion",
+var GenerateShellCompletionFlag Flag = &BoolFlag{
+	Name:   "generate-shell-completion",
 	Hidden: true,
 }
-    BashCompletionFlag enables bash-completion for all commands and subcommands
+    GenerateShellCompletionFlag enables shell completion
 
 var HelpFlag Flag = &BoolFlag{
-	Name:               "help",
-	Aliases:            []string{"h"},
-	Usage:              "show help",
-	DisableDefaultText: true,
+	Name:    "help",
+	Aliases: []string{"h"},
+	Usage:   "show help",
 }
     HelpFlag prints the help for all commands and subcommands. Set to nil to
     disable the flag. The subcommand will still be added unless HideHelp or
     HideHelpCommand is set to true.
 
 var VersionFlag Flag = &BoolFlag{
-	Name:               "version",
-	Aliases:            []string{"v"},
-	Usage:              "print the version",
-	DisableDefaultText: true,
+	Name:    "version",
+	Aliases: []string{"v"},
+	Usage:   "print the version",
 }
     VersionFlag prints the version for the application
+
+type FlagBase[T any, C any, VC ValueCreator[T, C]] struct {
+	Name        string                                   `json:"name"`         // name of the flag
+	Category    string                                   `json:"category"`     // category of the flag, if any
+	DefaultText string                                   `json:"defaultText"`  // default text of the flag for usage purposes
+	Usage       string                                   `json:"usage"`        // usage string for help output
+	Sources     ValueSourceChain                         `json:"-"`            // sources to load flag value from
+	Required    bool                                     `json:"required"`     // whether the flag is required or not
+	Hidden      bool                                     `json:"hidden"`       // whether to hide the flag in help output
+	Persistent  bool                                     `json:"persistent"`   // whether the flag needs to be applied to subcommands as well
+	Value       T                                        `json:"defaultValue"` // default value for this flag if not set by from any source
+	Destination *T                                       `json:"-"`            // destination pointer for value when set
+	Aliases     []string                                 `json:"aliases"`      // Aliases that are allowed for this flag
+	TakesFile   bool                                     `json:"takesFileArg"` // whether this flag takes a file argument, mainly for shell completion purposes
+	Action      func(context.Context, *Command, T) error `json:"-"`            // Action callback to be called when flag is set
+	Config      C                                        `json:"config"`       // Additional/Custom configuration associated with this flag type
+	OnlyOnce    bool                                     `json:"onlyOnce"`     // whether this flag can be duplicated on the command line
+	Validator   func(T) error                            `json:"-"`            // custom function to validate this flag value
+
+	// Has unexported fields.
+}
+    FlagBase[T,C,VC] is a generic flag base which can be used as a boilerplate
+    to implement the most common interfaces used by urfave/cli.
+
+        T specifies the type
+        C specifies the configuration required(if any for that flag type)
+        VC specifies the value creator which creates the flag.Value emulation
+
+func (f *FlagBase[T, C, V]) Apply(set *flag.FlagSet) error
+    Apply populates the flag given the flag set and environment
+
+func (f *FlagBase[T, C, V]) Get(cmd *Command) T
+    Get returns the flag’s value in the given Command.
+
+func (f *FlagBase[T, C, V]) GetCategory() string
+    GetCategory returns the category of the flag
+
+func (f *FlagBase[T, C, V]) GetDefaultText() string
+    GetDefaultText returns the default text for this flag
+
+func (f *FlagBase[T, C, V]) GetEnvVars() []string
+    GetEnvVars returns the env vars for this flag
+
+func (f *FlagBase[T, C, V]) GetUsage() string
+    GetUsage returns the usage string for the flag
+
+func (f *FlagBase[T, C, V]) GetValue() string
+    GetValue returns the flags value as string representation and an empty
+    string if the flag takes no value at all.
+
+func (f *FlagBase[T, C, VC]) IsMultiValueFlag() bool
+    IsMultiValueFlag returns true if the value type T can take multiple values
+    from cmd line. This is true for slice and map type flags
+
+func (f *FlagBase[T, C, VC]) IsPersistent() bool
+    IsPersistent returns true if flag needs to be persistent across subcommands
+
+func (f *FlagBase[T, C, V]) IsRequired() bool
+    IsRequired returns whether or not the flag is required
+
+func (f *FlagBase[T, C, V]) IsSet() bool
+    IsSet returns whether or not the flag has been set through env or file
+
+func (f *FlagBase[T, C, V]) IsVisible() bool
+    IsVisible returns true if the flag is not hidden, otherwise false
+
+func (f *FlagBase[T, C, V]) Names() []string
+    Names returns the names of the flag
+
+func (f *FlagBase[T, C, V]) RunAction(ctx context.Context, cmd *Command) error
+    RunAction executes flag action if set
+
+func (f *FlagBase[T, C, V]) SetCategory(c string)
+
+func (f *FlagBase[T, C, V]) String() string
+    String returns a readable representation of this value (for usage defaults)
+
+func (f *FlagBase[T, C, V]) TakesValue() bool
+    TakesValue returns true if the flag takes a value, otherwise false
 
 type FlagCategories interface {
 	// AddFlags adds a flag to a category, creating a new category if necessary.
@@ -952,596 +763,57 @@ func (f FlagsByName) Less(i, j int) bool
 
 func (f FlagsByName) Swap(i, j int)
 
-type Float64Flag struct {
-	Name string
+type FloatArg = ArgumentBase[float64, NoConfig, floatValue]
 
-	Category    string
-	DefaultText string
-	FilePath    string
-	Usage       string
+type FloatFlag = FlagBase[float64, NoConfig, floatValue]
 
-	Required   bool
-	Hidden     bool
-	HasBeenSet bool
+type FloatSlice = SliceBase[float64, NoConfig, floatValue]
 
-	Value       float64
-	Destination *float64
+type FloatSliceFlag = FlagBase[[]float64, NoConfig, FloatSlice]
 
-	Aliases []string
-	EnvVars []string
+type IntArg = ArgumentBase[int64, IntegerConfig, intValue]
 
-	Action func(*Context, float64) error
-	// Has unexported fields.
-}
-    Float64Flag is a flag with type float64
+type IntFlag = FlagBase[int64, IntegerConfig, intValue]
 
-func (f *Float64Flag) Apply(set *flag.FlagSet) error
-    Apply populates the flag given the flag set and environment
+type IntSlice = SliceBase[int64, IntegerConfig, intValue]
 
-func (f *Float64Flag) Get(ctx *Context) float64
-    Get returns the flag’s value in the given Context.
+type IntSliceFlag = FlagBase[[]int64, IntegerConfig, IntSlice]
 
-func (f *Float64Flag) GetCategory() string
-    GetCategory returns the category for the flag
-
-func (f *Float64Flag) GetDefaultText() string
-    GetDefaultText returns the default text for this flag
-
-func (f *Float64Flag) GetEnvVars() []string
-    GetEnvVars returns the env vars for this flag
-
-func (f *Float64Flag) GetUsage() string
-    GetUsage returns the usage string for the flag
-
-func (f *Float64Flag) GetValue() string
-    GetValue returns the flags value as string representation and an empty
-    string if the flag takes no value at all.
-
-func (f *Float64Flag) IsRequired() bool
-    IsRequired returns whether or not the flag is required
-
-func (f *Float64Flag) IsSet() bool
-    IsSet returns whether or not the flag has been set through env or file
-
-func (f *Float64Flag) IsVisible() bool
-    IsVisible returns true if the flag is not hidden, otherwise false
-
-func (f *Float64Flag) Names() []string
-    Names returns the names of the flag
-
-func (f *Float64Flag) RunAction(c *Context) error
-    RunAction executes flag action if set
-
-func (f *Float64Flag) String() string
-    String returns a readable representation of this value (for usage defaults)
-
-func (f *Float64Flag) TakesValue() bool
-    TakesValue returns true of the flag takes a value, otherwise false
-
-type Float64Slice struct {
-	// Has unexported fields.
-}
-    Float64Slice wraps []float64 to satisfy flag.Value
-
-func NewFloat64Slice(defaults ...float64) *Float64Slice
-    NewFloat64Slice makes a *Float64Slice with default values
-
-func (f *Float64Slice) Get() interface{}
-    Get returns the slice of float64s set by this flag
-
-func (f *Float64Slice) Serialize() string
-    Serialize allows Float64Slice to fulfill Serializer
-
-func (f *Float64Slice) Set(value string) error
-    Set parses the value into a float64 and appends it to the list of values
-
-func (f *Float64Slice) String() string
-    String returns a readable representation of this value (for usage defaults)
-
-func (f *Float64Slice) Value() []float64
-    Value returns the slice of float64s set by this flag
-
-func (f *Float64Slice) WithSeparatorSpec(spec separatorSpec)
-
-type Float64SliceFlag struct {
-	Name string
-
-	Category    string
-	DefaultText string
-	FilePath    string
-	Usage       string
-
-	Required   bool
-	Hidden     bool
-	HasBeenSet bool
-
-	Value       *Float64Slice
-	Destination *Float64Slice
-
-	Aliases []string
-	EnvVars []string
-
-	Action func(*Context, []float64) error
-	// Has unexported fields.
-}
-    Float64SliceFlag is a flag with type *Float64Slice
-
-func (f *Float64SliceFlag) Apply(set *flag.FlagSet) error
-    Apply populates the flag given the flag set and environment
-
-func (f *Float64SliceFlag) Get(ctx *Context) []float64
-    Get returns the flag’s value in the given Context.
-
-func (f *Float64SliceFlag) GetCategory() string
-    GetCategory returns the category for the flag
-
-func (f *Float64SliceFlag) GetDefaultText() string
-    GetDefaultText returns the default text for this flag
-
-func (f *Float64SliceFlag) GetDestination() []float64
-
-func (f *Float64SliceFlag) GetEnvVars() []string
-    GetEnvVars returns the env vars for this flag
-
-func (f *Float64SliceFlag) GetUsage() string
-    GetUsage returns the usage string for the flag
-
-func (f *Float64SliceFlag) GetValue() string
-    GetValue returns the flags value as string representation and an empty
-    string if the flag takes no value at all.
-
-func (f *Float64SliceFlag) IsRequired() bool
-    IsRequired returns whether or not the flag is required
-
-func (f *Float64SliceFlag) IsSet() bool
-    IsSet returns whether or not the flag has been set through env or file
-
-func (f *Float64SliceFlag) IsSliceFlag() bool
-    IsSliceFlag implements DocGenerationSliceFlag.
-
-func (f *Float64SliceFlag) IsVisible() bool
-    IsVisible returns true if the flag is not hidden, otherwise false
-
-func (f *Float64SliceFlag) Names() []string
-    Names returns the names of the flag
-
-func (f *Float64SliceFlag) RunAction(c *Context) error
-    RunAction executes flag action if set
-
-func (f *Float64SliceFlag) SetDestination(slice []float64)
-
-func (f *Float64SliceFlag) SetValue(slice []float64)
-
-func (f *Float64SliceFlag) String() string
-    String returns a readable representation of this value (for usage defaults)
-
-func (f *Float64SliceFlag) TakesValue() bool
-    TakesValue returns true if the flag takes a value, otherwise false
-
-func (f *Float64SliceFlag) WithSeparatorSpec(spec separatorSpec)
-
-type Generic interface {
-	Set(value string) error
-	String() string
-}
-    Generic is a generic parseable type identified by a specific flag
-
-type GenericFlag struct {
-	Name string
-
-	Category    string
-	DefaultText string
-	FilePath    string
-	Usage       string
-
-	Required   bool
-	Hidden     bool
-	HasBeenSet bool
-
-	Value       Generic
-	Destination Generic
-
-	Aliases []string
-	EnvVars []string
-
-	TakesFile bool
-
-	Action func(*Context, interface{}) error
-	// Has unexported fields.
-}
-    GenericFlag is a flag with type Generic
-
-func (f *GenericFlag) Apply(set *flag.FlagSet) error
-    Apply takes the flagset and calls Set on the generic flag with the value
-    provided by the user for parsing by the flag
-
-func (f *GenericFlag) Get(ctx *Context) interface{}
-    Get returns the flag’s value in the given Context.
-
-func (f *GenericFlag) GetCategory() string
-    GetCategory returns the category for the flag
-
-func (f *GenericFlag) GetDefaultText() string
-    GetDefaultText returns the default text for this flag
-
-func (f *GenericFlag) GetEnvVars() []string
-    GetEnvVars returns the env vars for this flag
-
-func (f *GenericFlag) GetUsage() string
-    GetUsage returns the usage string for the flag
-
-func (f *GenericFlag) GetValue() string
-    GetValue returns the flags value as string representation and an empty
-    string if the flag takes no value at all.
-
-func (f *GenericFlag) IsRequired() bool
-    IsRequired returns whether or not the flag is required
-
-func (f *GenericFlag) IsSet() bool
-    IsSet returns whether or not the flag has been set through env or file
-
-func (f *GenericFlag) IsVisible() bool
-    IsVisible returns true if the flag is not hidden, otherwise false
-
-func (f *GenericFlag) Names() []string
-    Names returns the names of the flag
-
-func (f *GenericFlag) RunAction(c *Context) error
-    RunAction executes flag action if set
-
-func (f *GenericFlag) String() string
-    String returns a readable representation of this value (for usage defaults)
-
-func (f *GenericFlag) TakesValue() bool
-    TakesValue returns true of the flag takes a value, otherwise false
-
-type Int64Flag struct {
-	Name string
-
-	Category    string
-	DefaultText string
-	FilePath    string
-	Usage       string
-
-	Required   bool
-	Hidden     bool
-	HasBeenSet bool
-
-	Value       int64
-	Destination *int64
-
-	Aliases []string
-	EnvVars []string
-
+type IntegerConfig struct {
 	Base int
-
-	Action func(*Context, int64) error
-	// Has unexported fields.
 }
-    Int64Flag is a flag with type int64
+    IntegerConfig is the configuration for all integer type flags
 
-func (f *Int64Flag) Apply(set *flag.FlagSet) error
-    Apply populates the flag given the flag set and environment
-
-func (f *Int64Flag) Get(ctx *Context) int64
-    Get returns the flag’s value in the given Context.
-
-func (f *Int64Flag) GetCategory() string
-    GetCategory returns the category for the flag
-
-func (f *Int64Flag) GetDefaultText() string
-    GetDefaultText returns the default text for this flag
-
-func (f *Int64Flag) GetEnvVars() []string
-    GetEnvVars returns the env vars for this flag
-
-func (f *Int64Flag) GetUsage() string
-    GetUsage returns the usage string for the flag
-
-func (f *Int64Flag) GetValue() string
-    GetValue returns the flags value as string representation and an empty
-    string if the flag takes no value at all.
-
-func (f *Int64Flag) IsRequired() bool
-    IsRequired returns whether or not the flag is required
-
-func (f *Int64Flag) IsSet() bool
-    IsSet returns whether or not the flag has been set through env or file
-
-func (f *Int64Flag) IsVisible() bool
-    IsVisible returns true if the flag is not hidden, otherwise false
-
-func (f *Int64Flag) Names() []string
-    Names returns the names of the flag
-
-func (f *Int64Flag) RunAction(c *Context) error
-    RunAction executes flag action if set
-
-func (f *Int64Flag) String() string
-    String returns a readable representation of this value (for usage defaults)
-
-func (f *Int64Flag) TakesValue() bool
-    TakesValue returns true of the flag takes a value, otherwise false
-
-type Int64Slice struct {
-	// Has unexported fields.
-}
-    Int64Slice wraps []int64 to satisfy flag.Value
-
-func NewInt64Slice(defaults ...int64) *Int64Slice
-    NewInt64Slice makes an *Int64Slice with default values
-
-func (i *Int64Slice) Get() interface{}
-    Get returns the slice of ints set by this flag
-
-func (i *Int64Slice) Serialize() string
-    Serialize allows Int64Slice to fulfill Serializer
-
-func (i *Int64Slice) Set(value string) error
-    Set parses the value into an integer and appends it to the list of values
-
-func (i *Int64Slice) String() string
-    String returns a readable representation of this value (for usage defaults)
-
-func (i *Int64Slice) Value() []int64
-    Value returns the slice of ints set by this flag
-
-func (i *Int64Slice) WithSeparatorSpec(spec separatorSpec)
-
-type Int64SliceFlag struct {
-	Name string
-
-	Category    string
-	DefaultText string
-	FilePath    string
-	Usage       string
-
-	Required   bool
-	Hidden     bool
-	HasBeenSet bool
-
-	Value       *Int64Slice
-	Destination *Int64Slice
-
-	Aliases []string
-	EnvVars []string
-
-	Action func(*Context, []int64) error
-	// Has unexported fields.
-}
-    Int64SliceFlag is a flag with type *Int64Slice
-
-func (f *Int64SliceFlag) Apply(set *flag.FlagSet) error
-    Apply populates the flag given the flag set and environment
-
-func (f *Int64SliceFlag) Get(ctx *Context) []int64
-    Get returns the flag’s value in the given Context.
-
-func (f *Int64SliceFlag) GetCategory() string
-    GetCategory returns the category for the flag
-
-func (f *Int64SliceFlag) GetDefaultText() string
-    GetDefaultText returns the default text for this flag
-
-func (f *Int64SliceFlag) GetDestination() []int64
-
-func (f *Int64SliceFlag) GetEnvVars() []string
-    GetEnvVars returns the env vars for this flag
-
-func (f *Int64SliceFlag) GetUsage() string
-    GetUsage returns the usage string for the flag
-
-func (f *Int64SliceFlag) GetValue() string
-    GetValue returns the flags value as string representation and an empty
-    string if the flag takes no value at all.
-
-func (f *Int64SliceFlag) IsRequired() bool
-    IsRequired returns whether or not the flag is required
-
-func (f *Int64SliceFlag) IsSet() bool
-    IsSet returns whether or not the flag has been set through env or file
-
-func (f *Int64SliceFlag) IsSliceFlag() bool
-    IsSliceFlag implements DocGenerationSliceFlag.
-
-func (f *Int64SliceFlag) IsVisible() bool
-    IsVisible returns true if the flag is not hidden, otherwise false
-
-func (f *Int64SliceFlag) Names() []string
-    Names returns the names of the flag
-
-func (f *Int64SliceFlag) RunAction(c *Context) error
-    RunAction executes flag action if set
-
-func (f *Int64SliceFlag) SetDestination(slice []int64)
-
-func (f *Int64SliceFlag) SetValue(slice []int64)
-
-func (f *Int64SliceFlag) String() string
-    String returns a readable representation of this value (for usage defaults)
-
-func (f *Int64SliceFlag) TakesValue() bool
-    TakesValue returns true of the flag takes a value, otherwise false
-
-func (f *Int64SliceFlag) WithSeparatorSpec(spec separatorSpec)
-
-type IntFlag struct {
-	Name string
-
-	Category    string
-	DefaultText string
-	FilePath    string
-	Usage       string
-
-	Required   bool
-	Hidden     bool
-	HasBeenSet bool
-
-	Value       int
-	Destination *int
-
-	Aliases []string
-	EnvVars []string
-
-	Base int
-
-	Action func(*Context, int) error
-	// Has unexported fields.
-}
-    IntFlag is a flag with type int
-
-func (f *IntFlag) Apply(set *flag.FlagSet) error
-    Apply populates the flag given the flag set and environment
-
-func (f *IntFlag) Get(ctx *Context) int
-    Get returns the flag’s value in the given Context.
-
-func (f *IntFlag) GetCategory() string
-    GetCategory returns the category for the flag
-
-func (f *IntFlag) GetDefaultText() string
-    GetDefaultText returns the default text for this flag
-
-func (f *IntFlag) GetEnvVars() []string
-    GetEnvVars returns the env vars for this flag
-
-func (f *IntFlag) GetUsage() string
-    GetUsage returns the usage string for the flag
-
-func (f *IntFlag) GetValue() string
-    GetValue returns the flags value as string representation and an empty
-    string if the flag takes no value at all.
-
-func (f *IntFlag) IsRequired() bool
-    IsRequired returns whether or not the flag is required
-
-func (f *IntFlag) IsSet() bool
-    IsSet returns whether or not the flag has been set through env or file
-
-func (f *IntFlag) IsVisible() bool
-    IsVisible returns true if the flag is not hidden, otherwise false
-
-func (f *IntFlag) Names() []string
-    Names returns the names of the flag
-
-func (f *IntFlag) RunAction(c *Context) error
-    RunAction executes flag action if set
-
-func (f *IntFlag) String() string
-    String returns a readable representation of this value (for usage defaults)
-
-func (f *IntFlag) TakesValue() bool
-    TakesValue returns true of the flag takes a value, otherwise false
-
-type IntSlice struct {
-	// Has unexported fields.
-}
-    IntSlice wraps []int to satisfy flag.Value
-
-func NewIntSlice(defaults ...int) *IntSlice
-    NewIntSlice makes an *IntSlice with default values
-
-func (i *IntSlice) Get() interface{}
-    Get returns the slice of ints set by this flag
-
-func (i *IntSlice) Serialize() string
-    Serialize allows IntSlice to fulfill Serializer
-
-func (i *IntSlice) Set(value string) error
-    Set parses the value into an integer and appends it to the list of values
-
-func (i *IntSlice) SetInt(value int)
-    TODO: Consistently have specific Set function for Int64 and Float64 ? SetInt
-    directly adds an integer to the list of values
-
-func (i *IntSlice) String() string
-    String returns a readable representation of this value (for usage defaults)
-
-func (i *IntSlice) Value() []int
-    Value returns the slice of ints set by this flag
-
-func (i *IntSlice) WithSeparatorSpec(spec separatorSpec)
-
-type IntSliceFlag struct {
-	Name string
-
-	Category    string
-	DefaultText string
-	FilePath    string
-	Usage       string
-
-	Required   bool
-	Hidden     bool
-	HasBeenSet bool
-
-	Value       *IntSlice
-	Destination *IntSlice
-
-	Aliases []string
-	EnvVars []string
-
-	Action func(*Context, []int) error
-	// Has unexported fields.
-}
-    IntSliceFlag is a flag with type *IntSlice
-
-func (f *IntSliceFlag) Apply(set *flag.FlagSet) error
-    Apply populates the flag given the flag set and environment
-
-func (f *IntSliceFlag) Get(ctx *Context) []int
-    Get returns the flag’s value in the given Context.
-
-func (f *IntSliceFlag) GetCategory() string
-    GetCategory returns the category for the flag
-
-func (f *IntSliceFlag) GetDefaultText() string
-    GetDefaultText returns the default text for this flag
-
-func (f *IntSliceFlag) GetDestination() []int
-
-func (f *IntSliceFlag) GetEnvVars() []string
-    GetEnvVars returns the env vars for this flag
-
-func (f *IntSliceFlag) GetUsage() string
-    GetUsage returns the usage string for the flag
-
-func (f *IntSliceFlag) GetValue() string
-    GetValue returns the flags value as string representation and an empty
-    string if the flag takes no value at all.
-
-func (f *IntSliceFlag) IsRequired() bool
-    IsRequired returns whether or not the flag is required
-
-func (f *IntSliceFlag) IsSet() bool
-    IsSet returns whether or not the flag has been set through env or file
-
-func (f *IntSliceFlag) IsSliceFlag() bool
-    IsSliceFlag implements DocGenerationSliceFlag.
-
-func (f *IntSliceFlag) IsVisible() bool
-    IsVisible returns true if the flag is not hidden, otherwise false
-
-func (f *IntSliceFlag) Names() []string
-    Names returns the names of the flag
-
-func (f *IntSliceFlag) RunAction(c *Context) error
-    RunAction executes flag action if set
-
-func (f *IntSliceFlag) SetDestination(slice []int)
-
-func (f *IntSliceFlag) SetValue(slice []int)
-
-func (f *IntSliceFlag) String() string
-    String returns a readable representation of this value (for usage defaults)
-
-func (f *IntSliceFlag) TakesValue() bool
-    TakesValue returns true of the flag takes a value, otherwise false
-
-func (f *IntSliceFlag) WithSeparatorSpec(spec separatorSpec)
-
-type InvalidFlagAccessFunc func(*Context, string)
+type InvalidFlagAccessFunc func(context.Context, *Command, string)
     InvalidFlagAccessFunc is executed when an invalid flag is accessed from the
     context.
+
+type MapBase[T any, C any, VC ValueCreator[T, C]] struct {
+	// Has unexported fields.
+}
+    MapBase wraps map[string]T to satisfy flag.Value
+
+func NewMapBase[T any, C any, VC ValueCreator[T, C]](defaults map[string]T) *MapBase[T, C, VC]
+    NewMapBase makes a *MapBase with default values
+
+func (i MapBase[T, C, VC]) Create(val map[string]T, p *map[string]T, c C) Value
+
+func (i *MapBase[T, C, VC]) Get() interface{}
+    Get returns the mapping of values set by this flag
+
+func (i *MapBase[T, C, VC]) Serialize() string
+    Serialize allows MapBase to fulfill Serializer
+
+func (i *MapBase[T, C, VC]) Set(value string) error
+    Set parses the value and appends it to the list of values
+
+func (i *MapBase[T, C, VC]) String() string
+    String returns a readable representation of this value (for usage defaults)
+
+func (i MapBase[T, C, VC]) ToString(t map[string]T) string
+
+func (i *MapBase[T, C, VC]) Value() map[string]T
+    Value returns the mapping of values set by this flag
 
 type MultiError interface {
 	error
@@ -1549,101 +821,37 @@ type MultiError interface {
 }
     MultiError is an error that wraps multiple errors.
 
-type MultiFloat64Flag = SliceFlag[*Float64SliceFlag, []float64, float64]
-    MultiFloat64Flag extends Float64SliceFlag with support for using slices
-    directly, as Value and/or Destination. See also SliceFlag.
+type MutuallyExclusiveFlags struct {
+	// Flag list
+	Flags [][]Flag
 
-type MultiInt64Flag = SliceFlag[*Int64SliceFlag, []int64, int64]
-    MultiInt64Flag extends Int64SliceFlag with support for using slices
-    directly, as Value and/or Destination. See also SliceFlag.
+	// whether this group is required
+	Required bool
 
-type MultiIntFlag = SliceFlag[*IntSliceFlag, []int, int]
-    MultiIntFlag extends IntSliceFlag with support for using slices directly,
-    as Value and/or Destination. See also SliceFlag.
+	// Category to apply to all flags within group
+	Category string
+}
+    MutuallyExclusiveFlags defines a mutually exclusive flag group Multiple
+    option paths can be provided out of which only one can be defined on cmdline
+    So for example [ --foo | [ --bar something --darth somethingelse ] ]
 
-type MultiStringFlag = SliceFlag[*StringSliceFlag, []string, string]
-    MultiStringFlag extends StringSliceFlag with support for using slices
-    directly, as Value and/or Destination. See also SliceFlag.
+type NoConfig struct{}
+    NoConfig is for flags which dont need a custom configuration
 
-type OnUsageErrorFunc func(cCtx *Context, err error, isSubcommand bool) error
+type OnUsageErrorFunc func(ctx context.Context, cmd *Command, err error, isSubcommand bool) error
     OnUsageErrorFunc is executed if a usage error occurs. This is useful for
     displaying customized usage error messages. This function is able to replace
     the original error messages. If this function is not set, the "Incorrect
     usage" is displayed and the execution is interrupted.
 
-type Path = string
-
-type PathFlag struct {
-	Name string
-
-	Category    string
-	DefaultText string
-	FilePath    string
-	Usage       string
-
-	Required   bool
-	Hidden     bool
-	HasBeenSet bool
-
-	Value       Path
-	Destination *Path
-
-	Aliases []string
-	EnvVars []string
-
-	TakesFile bool
-
-	Action func(*Context, Path) error
-	// Has unexported fields.
+type PersistentFlag interface {
+	IsPersistent() bool
 }
-    PathFlag is a flag with type Path
-
-func (f *PathFlag) Apply(set *flag.FlagSet) error
-    Apply populates the flag given the flag set and environment
-
-func (f *PathFlag) Get(ctx *Context) string
-    Get returns the flag’s value in the given Context.
-
-func (f *PathFlag) GetCategory() string
-    GetCategory returns the category for the flag
-
-func (f *PathFlag) GetDefaultText() string
-    GetDefaultText returns the default text for this flag
-
-func (f *PathFlag) GetEnvVars() []string
-    GetEnvVars returns the env vars for this flag
-
-func (f *PathFlag) GetUsage() string
-    GetUsage returns the usage string for the flag
-
-func (f *PathFlag) GetValue() string
-    GetValue returns the flags value as string representation and an empty
-    string if the flag takes no value at all.
-
-func (f *PathFlag) IsRequired() bool
-    IsRequired returns whether or not the flag is required
-
-func (f *PathFlag) IsSet() bool
-    IsSet returns whether or not the flag has been set through env or file
-
-func (f *PathFlag) IsVisible() bool
-    IsVisible returns true if the flag is not hidden, otherwise false
-
-func (f *PathFlag) Names() []string
-    Names returns the names of the flag
-
-func (f *PathFlag) RunAction(c *Context) error
-    RunAction executes flag action if set
-
-func (f *PathFlag) String() string
-    String returns a readable representation of this value (for usage defaults)
-
-func (f *PathFlag) TakesValue() bool
-    TakesValue returns true of the flag takes a value, otherwise false
+    PersistentFlag is an interface to enable detection of flags which are
+    persistent through subcommands
 
 type RequiredFlag interface {
-	Flag
-
+	// whether the flag is a required flag or not
 	IsRequired() bool
 }
     RequiredFlag is an interface that allows us to mark flags as required
@@ -1655,679 +863,141 @@ type Serializer interface {
 }
     Serializer is used to circumvent the limitations of flag.FlagSet.Set
 
-type SliceFlag[T SliceFlagTarget[E], S ~[]E, E any] struct {
-	Target      T
-	Value       S
-	Destination *S
-}
-    SliceFlag extends implementations like StringSliceFlag and IntSliceFlag
-    with support for using slices directly, as Value and/or Destination.
-    See also SliceFlagTarget, MultiStringFlag, MultiFloat64Flag, MultiInt64Flag,
-    MultiIntFlag.
+type ShellCompleteFunc func(context.Context, *Command)
+    ShellCompleteFunc is an action to execute when the shell completion flag is
+    set
 
-func (x *SliceFlag[T, S, E]) Apply(set *flag.FlagSet) error
-
-func (x *SliceFlag[T, S, E]) GetCategory() string
-
-func (x *SliceFlag[T, S, E]) GetDefaultText() string
-
-func (x *SliceFlag[T, S, E]) GetDestination() S
-
-func (x *SliceFlag[T, S, E]) GetEnvVars() []string
-
-func (x *SliceFlag[T, S, E]) GetUsage() string
-
-func (x *SliceFlag[T, S, E]) GetValue() string
-
-func (x *SliceFlag[T, S, E]) IsRequired() bool
-
-func (x *SliceFlag[T, S, E]) IsSet() bool
-
-func (x *SliceFlag[T, S, E]) IsVisible() bool
-
-func (x *SliceFlag[T, S, E]) Names() []string
-
-func (x *SliceFlag[T, S, E]) SetDestination(slice S)
-
-func (x *SliceFlag[T, S, E]) SetValue(slice S)
-
-func (x *SliceFlag[T, S, E]) String() string
-
-func (x *SliceFlag[T, S, E]) TakesValue() bool
-
-type SliceFlagTarget[E any] interface {
-	Flag
-	RequiredFlag
-	DocGenerationFlag
-	VisibleFlag
-	CategorizableFlag
-
-	// SetValue should propagate the given slice to the target, ideally as a new value.
-	// Note that a nil slice should nil/clear any existing value (modelled as ~[]E).
-	SetValue(slice []E)
-	// SetDestination should propagate the given slice to the target, ideally as a new value.
-	// Note that a nil slice should nil/clear any existing value (modelled as ~*[]E).
-	SetDestination(slice []E)
-	// GetDestination should return the current value referenced by any destination, or nil if nil/unset.
-	GetDestination() []E
-}
-    SliceFlagTarget models a target implementation for use with SliceFlag. The
-    three methods, SetValue, SetDestination, and GetDestination, are necessary
-    to propagate Value and Destination, where Value is propagated inwards
-    (initially), and Destination is propagated outwards (on every update).
-
-type StringFlag struct {
-	Name string
-
-	Category    string
-	DefaultText string
-	FilePath    string
-	Usage       string
-
-	Required   bool
-	Hidden     bool
-	HasBeenSet bool
-
-	Value       string
-	Destination *string
-
-	Aliases []string
-	EnvVars []string
-
-	TakesFile bool
-
-	Action func(*Context, string) error
+type SliceBase[T any, C any, VC ValueCreator[T, C]] struct {
 	// Has unexported fields.
 }
-    StringFlag is a flag with type string
+    SliceBase wraps []T to satisfy flag.Value
 
-func (f *StringFlag) Apply(set *flag.FlagSet) error
-    Apply populates the flag given the flag set and environment
+func NewSliceBase[T any, C any, VC ValueCreator[T, C]](defaults ...T) *SliceBase[T, C, VC]
+    NewSliceBase makes a *SliceBase with default values
 
-func (f *StringFlag) Get(ctx *Context) string
-    Get returns the flag’s value in the given Context.
+func (i SliceBase[T, C, VC]) Create(val []T, p *[]T, c C) Value
 
-func (f *StringFlag) GetCategory() string
-    GetCategory returns the category for the flag
+func (i *SliceBase[T, C, VC]) Get() interface{}
+    Get returns the slice of values set by this flag
 
-func (f *StringFlag) GetDefaultText() string
-    GetDefaultText returns the default text for this flag
+func (i *SliceBase[T, C, VC]) Serialize() string
+    Serialize allows SliceBase to fulfill Serializer
 
-func (f *StringFlag) GetEnvVars() []string
-    GetEnvVars returns the env vars for this flag
+func (i *SliceBase[T, C, VC]) Set(value string) error
+    Set parses the value and appends it to the list of values
 
-func (f *StringFlag) GetUsage() string
-    GetUsage returns the usage string for the flag
+func (i *SliceBase[T, C, VC]) SetOne(value T)
+    SetOne directly adds a value to the list of values
 
-func (f *StringFlag) GetValue() string
-    GetValue returns the flags value as string representation and an empty
-    string if the flag takes no value at all.
-
-func (f *StringFlag) IsRequired() bool
-    IsRequired returns whether or not the flag is required
-
-func (f *StringFlag) IsSet() bool
-    IsSet returns whether or not the flag has been set through env or file
-
-func (f *StringFlag) IsVisible() bool
-    IsVisible returns true if the flag is not hidden, otherwise false
-
-func (f *StringFlag) Names() []string
-    Names returns the names of the flag
-
-func (f *StringFlag) RunAction(c *Context) error
-    RunAction executes flag action if set
-
-func (f *StringFlag) String() string
+func (i *SliceBase[T, C, VC]) String() string
     String returns a readable representation of this value (for usage defaults)
 
-func (f *StringFlag) TakesValue() bool
-    TakesValue returns true of the flag takes a value, otherwise false
+func (i SliceBase[T, C, VC]) ToString(t []T) string
 
-type StringSlice struct {
-	// Has unexported fields.
+func (i *SliceBase[T, C, VC]) Value() []T
+    Value returns the slice of values set by this flag
+
+type StringArg = ArgumentBase[string, StringConfig, stringValue]
+
+type StringConfig struct {
+	// Whether to trim whitespace of parsed value
+	TrimSpace bool
 }
-    StringSlice wraps a []string to satisfy flag.Value
+    StringConfig defines the configuration for string flags
 
-func NewStringSlice(defaults ...string) *StringSlice
-    NewStringSlice creates a *StringSlice with default values
+type StringFlag = FlagBase[string, StringConfig, stringValue]
 
-func (s *StringSlice) Get() interface{}
-    Get returns the slice of strings set by this flag
+type StringMap = MapBase[string, StringConfig, stringValue]
 
-func (s *StringSlice) Serialize() string
-    Serialize allows StringSlice to fulfill Serializer
+type StringMapArg = ArgumentBase[map[string]string, StringConfig, StringMap]
 
-func (s *StringSlice) Set(value string) error
-    Set appends the string value to the list of values
+type StringMapFlag = FlagBase[map[string]string, StringConfig, StringMap]
 
-func (s *StringSlice) String() string
-    String returns a readable representation of this value (for usage defaults)
+type StringSlice = SliceBase[string, StringConfig, stringValue]
 
-func (s *StringSlice) Value() []string
-    Value returns the slice of strings set by this flag
-
-func (s *StringSlice) WithSeparatorSpec(spec separatorSpec)
-
-type StringSliceFlag struct {
-	Name string
-
-	Category    string
-	DefaultText string
-	FilePath    string
-	Usage       string
-
-	Required   bool
-	Hidden     bool
-	HasBeenSet bool
-
-	Value       *StringSlice
-	Destination *StringSlice
-
-	Aliases []string
-	EnvVars []string
-
-	TakesFile bool
-
-	Action func(*Context, []string) error
-
-	KeepSpace bool
-	// Has unexported fields.
-}
-    StringSliceFlag is a flag with type *StringSlice
-
-func (f *StringSliceFlag) Apply(set *flag.FlagSet) error
-    Apply populates the flag given the flag set and environment
-
-func (f *StringSliceFlag) Get(ctx *Context) []string
-    Get returns the flag’s value in the given Context.
-
-func (f *StringSliceFlag) GetCategory() string
-    GetCategory returns the category for the flag
-
-func (f *StringSliceFlag) GetDefaultText() string
-    GetDefaultText returns the default text for this flag
-
-func (f *StringSliceFlag) GetDestination() []string
-
-func (f *StringSliceFlag) GetEnvVars() []string
-    GetEnvVars returns the env vars for this flag
-
-func (f *StringSliceFlag) GetUsage() string
-    GetUsage returns the usage string for the flag
-
-func (f *StringSliceFlag) GetValue() string
-    GetValue returns the flags value as string representation and an empty
-    string if the flag takes no value at all.
-
-func (f *StringSliceFlag) IsRequired() bool
-    IsRequired returns whether or not the flag is required
-
-func (f *StringSliceFlag) IsSet() bool
-    IsSet returns whether or not the flag has been set through env or file
-
-func (f *StringSliceFlag) IsSliceFlag() bool
-    IsSliceFlag implements DocGenerationSliceFlag.
-
-func (f *StringSliceFlag) IsVisible() bool
-    IsVisible returns true if the flag is not hidden, otherwise false
-
-func (f *StringSliceFlag) Names() []string
-    Names returns the names of the flag
-
-func (f *StringSliceFlag) RunAction(c *Context) error
-    RunAction executes flag action if set
-
-func (f *StringSliceFlag) SetDestination(slice []string)
-
-func (f *StringSliceFlag) SetValue(slice []string)
-
-func (f *StringSliceFlag) String() string
-    String returns a readable representation of this value (for usage defaults)
-
-func (f *StringSliceFlag) TakesValue() bool
-    TakesValue returns true of the flag takes a value, otherwise false
-
-func (f *StringSliceFlag) WithSeparatorSpec(spec separatorSpec)
+type StringSliceFlag = FlagBase[[]string, StringConfig, StringSlice]
 
 type SuggestCommandFunc func(commands []*Command, provided string) string
 
 type SuggestFlagFunc func(flags []Flag, provided string, hideHelp bool) string
 
-type Timestamp struct {
-	// Has unexported fields.
-}
-    Timestamp wrap to satisfy golang's flag interface.
+type TimestampArg = ArgumentBase[time.Time, TimestampConfig, timestampValue]
 
-func NewTimestamp(timestamp time.Time) *Timestamp
-    Timestamp constructor
-
-func (t *Timestamp) Get() interface{}
-    Get returns the flag structure
-
-func (t *Timestamp) Set(value string) error
-    Parses the string value to timestamp
-
-func (t *Timestamp) SetLayout(layout string)
-    Set the timestamp string layout for future parsing
-
-func (t *Timestamp) SetLocation(loc *time.Location)
-    Set perceived timezone of the to-be parsed time string
-
-func (t *Timestamp) SetTimestamp(value time.Time)
-    Set the timestamp value directly
-
-func (t *Timestamp) String() string
-    String returns a readable representation of this value (for usage defaults)
-
-func (t *Timestamp) Value() *time.Time
-    Value returns the timestamp value stored in the flag
-
-type TimestampFlag struct {
-	Name string
-
-	Category    string
-	DefaultText string
-	FilePath    string
-	Usage       string
-
-	Required   bool
-	Hidden     bool
-	HasBeenSet bool
-
-	Value       *Timestamp
-	Destination *Timestamp
-
-	Aliases []string
-	EnvVars []string
-
-	Layout string
-
+type TimestampConfig struct {
 	Timezone *time.Location
-
-	Action func(*Context, *time.Time) error
-	// Has unexported fields.
+	Layout   string
 }
-    TimestampFlag is a flag with type *Timestamp
+    TimestampConfig defines the config for timestamp flags
 
-func (f *TimestampFlag) Apply(set *flag.FlagSet) error
-    Apply populates the flag given the flag set and environment
+type TimestampFlag = FlagBase[time.Time, TimestampConfig, timestampValue]
 
-func (f *TimestampFlag) Get(ctx *Context) *time.Time
-    Get returns the flag’s value in the given Context.
+type UintArg = ArgumentBase[uint64, IntegerConfig, uintValue]
 
-func (f *TimestampFlag) GetCategory() string
-    GetCategory returns the category for the flag
+type UintFlag = FlagBase[uint64, IntegerConfig, uintValue]
 
-func (f *TimestampFlag) GetDefaultText() string
-    GetDefaultText returns the default text for this flag
+type UintSlice = SliceBase[uint64, IntegerConfig, uintValue]
 
-func (f *TimestampFlag) GetEnvVars() []string
-    GetEnvVars returns the env vars for this flag
+type UintSliceFlag = FlagBase[[]uint64, IntegerConfig, UintSlice]
 
-func (f *TimestampFlag) GetUsage() string
-    GetUsage returns the usage string for the flag
-
-func (f *TimestampFlag) GetValue() string
-    GetValue returns the flags value as string representation and an empty
-    string if the flag takes no value at all.
-
-func (f *TimestampFlag) IsRequired() bool
-    IsRequired returns whether or not the flag is required
-
-func (f *TimestampFlag) IsSet() bool
-    IsSet returns whether or not the flag has been set through env or file
-
-func (f *TimestampFlag) IsVisible() bool
-    IsVisible returns true if the flag is not hidden, otherwise false
-
-func (f *TimestampFlag) Names() []string
-    Names returns the names of the flag
-
-func (f *TimestampFlag) RunAction(c *Context) error
-    RunAction executes flag action if set
-
-func (f *TimestampFlag) String() string
-    String returns a readable representation of this value (for usage defaults)
-
-func (f *TimestampFlag) TakesValue() bool
-    TakesValue returns true of the flag takes a value, otherwise false
-
-type Uint64Flag struct {
-	Name string
-
-	Category    string
-	DefaultText string
-	FilePath    string
-	Usage       string
-
-	Required   bool
-	Hidden     bool
-	HasBeenSet bool
-
-	Value       uint64
-	Destination *uint64
-
-	Aliases []string
-	EnvVars []string
-
-	Base int
-
-	Action func(*Context, uint64) error
-	// Has unexported fields.
+type Value interface {
+	flag.Value
+	flag.Getter
 }
-    Uint64Flag is a flag with type uint64
+    Value represents a value as used by cli. For now it implements the golang
+    flag.Value interface
 
-func (f *Uint64Flag) Apply(set *flag.FlagSet) error
-    Apply populates the flag given the flag set and environment
-
-func (f *Uint64Flag) Get(ctx *Context) uint64
-    Get returns the flag’s value in the given Context.
-
-func (f *Uint64Flag) GetCategory() string
-    GetCategory returns the category for the flag
-
-func (f *Uint64Flag) GetDefaultText() string
-    GetDefaultText returns the default text for this flag
-
-func (f *Uint64Flag) GetEnvVars() []string
-    GetEnvVars returns the env vars for this flag
-
-func (f *Uint64Flag) GetUsage() string
-    GetUsage returns the usage string for the flag
-
-func (f *Uint64Flag) GetValue() string
-    GetValue returns the flags value as string representation and an empty
-    string if the flag takes no value at all.
-
-func (f *Uint64Flag) IsRequired() bool
-    IsRequired returns whether or not the flag is required
-
-func (f *Uint64Flag) IsSet() bool
-    IsSet returns whether or not the flag has been set through env or file
-
-func (f *Uint64Flag) IsVisible() bool
-    IsVisible returns true if the flag is not hidden, otherwise false
-
-func (f *Uint64Flag) Names() []string
-    Names returns the names of the flag
-
-func (f *Uint64Flag) RunAction(c *Context) error
-    RunAction executes flag action if set
-
-func (f *Uint64Flag) String() string
-    String returns a readable representation of this value (for usage defaults)
-
-func (f *Uint64Flag) TakesValue() bool
-    TakesValue returns true of the flag takes a value, otherwise false
-
-type Uint64Slice struct {
-	// Has unexported fields.
+type ValueCreator[T any, C any] interface {
+	Create(T, *T, C) Value
+	ToString(T) string
 }
-    Uint64Slice wraps []int64 to satisfy flag.Value
+    ValueCreator is responsible for creating a flag.Value emulation as well as
+    custom formatting
 
-func NewUint64Slice(defaults ...uint64) *Uint64Slice
-    NewUint64Slice makes an *Uint64Slice with default values
+        T specifies the type
+        C specifies the config for the type
 
-func (i *Uint64Slice) Get() interface{}
-    Get returns the slice of ints set by this flag
+type ValueSource interface {
+	fmt.Stringer
+	fmt.GoStringer
 
-func (i *Uint64Slice) Serialize() string
-    Serialize allows Uint64Slice to fulfill Serializer
-
-func (i *Uint64Slice) Set(value string) error
-    Set parses the value into an integer and appends it to the list of values
-
-func (i *Uint64Slice) String() string
-    String returns a readable representation of this value (for usage defaults)
-
-func (i *Uint64Slice) Value() []uint64
-    Value returns the slice of ints set by this flag
-
-func (i *Uint64Slice) WithSeparatorSpec(spec separatorSpec)
-
-type Uint64SliceFlag struct {
-	Name string
-
-	Category    string
-	DefaultText string
-	FilePath    string
-	Usage       string
-
-	Required   bool
-	Hidden     bool
-	HasBeenSet bool
-
-	Value       *Uint64Slice
-	Destination *Uint64Slice
-
-	Aliases []string
-	EnvVars []string
-
-	Action func(*Context, []uint64) error
-	// Has unexported fields.
+	// Lookup returns the value from the source and if it was found
+	// or returns an empty string and false
+	Lookup() (string, bool)
 }
-    Uint64SliceFlag is a flag with type *Uint64Slice
+    ValueSource is a source which can be used to look up a value, typically for
+    use with a cli.Flag
 
-func (f *Uint64SliceFlag) Apply(set *flag.FlagSet) error
-    Apply populates the flag given the flag set and environment
+func EnvVar(key string) ValueSource
 
-func (f *Uint64SliceFlag) Get(ctx *Context) []uint64
-    Get returns the flag’s value in the given Context.
-
-func (f *Uint64SliceFlag) GetCategory() string
-    GetCategory returns the category for the flag
-
-func (f *Uint64SliceFlag) GetDefaultText() string
-    GetDefaultText returns the default text for this flag
-
-func (f *Uint64SliceFlag) GetEnvVars() []string
-    GetEnvVars returns the env vars for this flag
-
-func (f *Uint64SliceFlag) GetUsage() string
-    GetUsage returns the usage string for the flag
-
-func (f *Uint64SliceFlag) GetValue() string
-    GetValue returns the flags value as string representation and an empty
-    string if the flag takes no value at all.
-
-func (f *Uint64SliceFlag) IsRequired() bool
-    IsRequired returns whether or not the flag is required
-
-func (f *Uint64SliceFlag) IsSet() bool
-    IsSet returns whether or not the flag has been set through env or file
-
-func (f *Uint64SliceFlag) IsSliceFlag() bool
-    IsSliceFlag implements DocGenerationSliceFlag.
-
-func (f *Uint64SliceFlag) IsVisible() bool
-    IsVisible returns true if the flag is not hidden, otherwise false
-
-func (f *Uint64SliceFlag) Names() []string
-    Names returns the names of the flag
-
-func (f *Uint64SliceFlag) RunAction(c *Context) error
-    RunAction executes flag action if set
-
-func (f *Uint64SliceFlag) String() string
-    String returns a readable representation of this value (for usage defaults)
-
-func (f *Uint64SliceFlag) TakesValue() bool
-    TakesValue returns true of the flag takes a value, otherwise false
-
-func (f *Uint64SliceFlag) WithSeparatorSpec(spec separatorSpec)
-
-type UintFlag struct {
-	Name string
-
-	Category    string
-	DefaultText string
-	FilePath    string
-	Usage       string
-
-	Required   bool
-	Hidden     bool
-	HasBeenSet bool
-
-	Value       uint
-	Destination *uint
-
-	Aliases []string
-	EnvVars []string
-
-	Base int
-
-	Action func(*Context, uint) error
-	// Has unexported fields.
+type ValueSourceChain struct {
+	Chain []ValueSource
 }
-    UintFlag is a flag with type uint
+    ValueSourceChain contains an ordered series of ValueSource that allows for
+    lookup where the first ValueSource to resolve is returned
 
-func (f *UintFlag) Apply(set *flag.FlagSet) error
-    Apply populates the flag given the flag set and environment
+func EnvVars(keys ...string) ValueSourceChain
+    EnvVars is a helper function to encapsulate a number of envVarValueSource
+    together as a ValueSourceChain
 
-func (f *UintFlag) Get(ctx *Context) uint
-    Get returns the flag’s value in the given Context.
+func Files(paths ...string) ValueSourceChain
+    Files is a helper function to encapsulate a number of fileValueSource
+    together as a ValueSourceChain
 
-func (f *UintFlag) GetCategory() string
-    GetCategory returns the category for the flag
+func NewValueSourceChain(src ...ValueSource) ValueSourceChain
 
-func (f *UintFlag) GetDefaultText() string
-    GetDefaultText returns the default text for this flag
+func (vsc *ValueSourceChain) Append(other ValueSourceChain)
 
-func (f *UintFlag) GetEnvVars() []string
-    GetEnvVars returns the env vars for this flag
+func (vsc *ValueSourceChain) EnvKeys() []string
 
-func (f *UintFlag) GetUsage() string
-    GetUsage returns the usage string for the flag
+func (vsc *ValueSourceChain) GoString() string
 
-func (f *UintFlag) GetValue() string
-    GetValue returns the flags value as string representation and an empty
-    string if the flag takes no value at all.
+func (vsc *ValueSourceChain) Lookup() (string, bool)
 
-func (f *UintFlag) IsRequired() bool
-    IsRequired returns whether or not the flag is required
+func (vsc *ValueSourceChain) LookupWithSource() (string, ValueSource, bool)
 
-func (f *UintFlag) IsSet() bool
-    IsSet returns whether or not the flag has been set through env or file
-
-func (f *UintFlag) IsVisible() bool
-    IsVisible returns true if the flag is not hidden, otherwise false
-
-func (f *UintFlag) Names() []string
-    Names returns the names of the flag
-
-func (f *UintFlag) RunAction(c *Context) error
-    RunAction executes flag action if set
-
-func (f *UintFlag) String() string
-    String returns a readable representation of this value (for usage defaults)
-
-func (f *UintFlag) TakesValue() bool
-    TakesValue returns true of the flag takes a value, otherwise false
-
-type UintSlice struct {
-	// Has unexported fields.
-}
-    UintSlice wraps []int to satisfy flag.Value
-
-func NewUintSlice(defaults ...uint) *UintSlice
-    NewUintSlice makes an *UintSlice with default values
-
-func (i *UintSlice) Get() interface{}
-    Get returns the slice of ints set by this flag
-
-func (i *UintSlice) Serialize() string
-    Serialize allows UintSlice to fulfill Serializer
-
-func (i *UintSlice) Set(value string) error
-    Set parses the value into an integer and appends it to the list of values
-
-func (i *UintSlice) SetUint(value uint)
-    TODO: Consistently have specific Set function for Int64 and Float64 ? SetInt
-    directly adds an integer to the list of values
-
-func (i *UintSlice) String() string
-    String returns a readable representation of this value (for usage defaults)
-
-func (i *UintSlice) Value() []uint
-    Value returns the slice of ints set by this flag
-
-func (i *UintSlice) WithSeparatorSpec(spec separatorSpec)
-
-type UintSliceFlag struct {
-	Name string
-
-	Category    string
-	DefaultText string
-	FilePath    string
-	Usage       string
-
-	Required   bool
-	Hidden     bool
-	HasBeenSet bool
-
-	Value       *UintSlice
-	Destination *UintSlice
-
-	Aliases []string
-	EnvVars []string
-
-	Action func(*Context, []uint) error
-	// Has unexported fields.
-}
-    UintSliceFlag is a flag with type *UintSlice
-
-func (f *UintSliceFlag) Apply(set *flag.FlagSet) error
-    Apply populates the flag given the flag set and environment
-
-func (f *UintSliceFlag) Get(ctx *Context) []uint
-    Get returns the flag’s value in the given Context.
-
-func (f *UintSliceFlag) GetCategory() string
-    GetCategory returns the category for the flag
-
-func (f *UintSliceFlag) GetDefaultText() string
-    GetDefaultText returns the default text for this flag
-
-func (f *UintSliceFlag) GetEnvVars() []string
-    GetEnvVars returns the env vars for this flag
-
-func (f *UintSliceFlag) GetUsage() string
-    GetUsage returns the usage string for the flag
-
-func (f *UintSliceFlag) GetValue() string
-    GetValue returns the flags value as string representation and an empty
-    string if the flag takes no value at all.
-
-func (f *UintSliceFlag) IsRequired() bool
-    IsRequired returns whether or not the flag is required
-
-func (f *UintSliceFlag) IsSet() bool
-    IsSet returns whether or not the flag has been set through env or file
-
-func (f *UintSliceFlag) IsSliceFlag() bool
-    IsSliceFlag implements DocGenerationSliceFlag.
-
-func (f *UintSliceFlag) IsVisible() bool
-    IsVisible returns true if the flag is not hidden, otherwise false
-
-func (f *UintSliceFlag) Names() []string
-    Names returns the names of the flag
-
-func (f *UintSliceFlag) RunAction(c *Context) error
-    RunAction executes flag action if set
-
-func (f *UintSliceFlag) String() string
-    String returns a readable representation of this value (for usage defaults)
-
-func (f *UintSliceFlag) TakesValue() bool
-    TakesValue returns true of the flag takes a value, otherwise false
-
-func (f *UintSliceFlag) WithSeparatorSpec(spec separatorSpec)
+func (vsc *ValueSourceChain) String() string
 
 type VisibleFlag interface {
-	Flag
-
 	// IsVisible returns true if the flag is not hidden, otherwise false
 	IsVisible() bool
 }
@@ -2337,388 +1007,7 @@ type VisibleFlagCategory interface {
 	// Name returns the category name string
 	Name() string
 	// Flags returns a slice of VisibleFlag sorted by name
-	Flags() []VisibleFlag
+	Flags() []Flag
 }
     VisibleFlagCategory is a category containing flags.
-
-package altsrc // import "github.com/urfave/cli/v2/altsrc"
-
-
-FUNCTIONS
-
-func ApplyInputSourceValues(cCtx *cli.Context, inputSourceContext InputSourceContext, flags []cli.Flag) error
-    ApplyInputSourceValues iterates over all provided flags and executes
-    ApplyInputSourceValue on flags implementing the FlagInputSourceExtension
-    interface to initialize these flags to an alternate input source.
-
-func InitInputSource(flags []cli.Flag, createInputSource func() (InputSourceContext, error)) cli.BeforeFunc
-    InitInputSource is used to to setup an InputSourceContext on a cli.Command
-    Before method. It will create a new input source based on the func provided.
-    If there is no error it will then apply the new input source to any flags
-    that are supported by the input source
-
-func InitInputSourceWithContext(flags []cli.Flag, createInputSource func(cCtx *cli.Context) (InputSourceContext, error)) cli.BeforeFunc
-    InitInputSourceWithContext is used to to setup an InputSourceContext on
-    a cli.Command Before method. It will create a new input source based on
-    the func provided with potentially using existing cli.Context values to
-    initialize itself. If there is no error it will then apply the new input
-    source to any flags that are supported by the input source
-
-func NewJSONSourceFromFlagFunc(flag string) func(c *cli.Context) (InputSourceContext, error)
-    NewJSONSourceFromFlagFunc returns a func that takes a cli.Context and
-    returns an InputSourceContext suitable for retrieving config variables from
-    a file containing JSON data with the file name defined by the given flag.
-
-func NewTomlSourceFromFlagFunc(flagFileName string) func(cCtx *cli.Context) (InputSourceContext, error)
-    NewTomlSourceFromFlagFunc creates a new TOML InputSourceContext from a
-    provided flag name and source context.
-
-func NewYamlSourceFromFlagFunc(flagFileName string) func(cCtx *cli.Context) (InputSourceContext, error)
-    NewYamlSourceFromFlagFunc creates a new Yaml InputSourceContext from a
-    provided flag name and source context.
-
-
-TYPES
-
-type BoolFlag struct {
-	*cli.BoolFlag
-	// Has unexported fields.
-}
-    BoolFlag is the flag type that wraps cli.BoolFlag to allow for other values
-    to be specified
-
-func NewBoolFlag(fl *cli.BoolFlag) *BoolFlag
-    NewBoolFlag creates a new BoolFlag
-
-func (f *BoolFlag) Apply(set *flag.FlagSet) error
-    Apply saves the flagSet for later usage calls, then calls the wrapped
-    BoolFlag.Apply
-
-func (f *BoolFlag) ApplyInputSourceValue(cCtx *cli.Context, isc InputSourceContext) error
-    ApplyInputSourceValue applies a Bool value to the flagSet if required
-
-type DurationFlag struct {
-	*cli.DurationFlag
-	// Has unexported fields.
-}
-    DurationFlag is the flag type that wraps cli.DurationFlag to allow for other
-    values to be specified
-
-func NewDurationFlag(fl *cli.DurationFlag) *DurationFlag
-    NewDurationFlag creates a new DurationFlag
-
-func (f *DurationFlag) Apply(set *flag.FlagSet) error
-    Apply saves the flagSet for later usage calls, then calls the wrapped
-    DurationFlag.Apply
-
-func (f *DurationFlag) ApplyInputSourceValue(cCtx *cli.Context, isc InputSourceContext) error
-    ApplyInputSourceValue applies a Duration value to the flagSet if required
-
-type FlagInputSourceExtension interface {
-	cli.Flag
-	ApplyInputSourceValue(cCtx *cli.Context, isc InputSourceContext) error
-}
-    FlagInputSourceExtension is an extension interface of cli.Flag that allows a
-    value to be set on the existing parsed flags.
-
-type Float64Flag struct {
-	*cli.Float64Flag
-	// Has unexported fields.
-}
-    Float64Flag is the flag type that wraps cli.Float64Flag to allow for other
-    values to be specified
-
-func NewFloat64Flag(fl *cli.Float64Flag) *Float64Flag
-    NewFloat64Flag creates a new Float64Flag
-
-func (f *Float64Flag) Apply(set *flag.FlagSet) error
-    Apply saves the flagSet for later usage calls, then calls the wrapped
-    Float64Flag.Apply
-
-func (f *Float64Flag) ApplyInputSourceValue(cCtx *cli.Context, isc InputSourceContext) error
-    ApplyInputSourceValue applies a Float64 value to the flagSet if required
-
-type Float64SliceFlag struct {
-	*cli.Float64SliceFlag
-	// Has unexported fields.
-}
-    Float64SliceFlag is the flag type that wraps cli.Float64SliceFlag to allow
-    for other values to be specified
-
-func NewFloat64SliceFlag(fl *cli.Float64SliceFlag) *Float64SliceFlag
-    NewFloat64SliceFlag creates a new Float64SliceFlag
-
-func (f *Float64SliceFlag) Apply(set *flag.FlagSet) error
-    Apply saves the flagSet for later usage calls, then calls the wrapped
-    Float64SliceFlag.Apply
-
-func (f *Float64SliceFlag) ApplyInputSourceValue(cCtx *cli.Context, isc InputSourceContext) error
-    ApplyInputSourceValue applies a Float64Slice value if required
-
-type GenericFlag struct {
-	*cli.GenericFlag
-	// Has unexported fields.
-}
-    GenericFlag is the flag type that wraps cli.GenericFlag to allow for other
-    values to be specified
-
-func NewGenericFlag(fl *cli.GenericFlag) *GenericFlag
-    NewGenericFlag creates a new GenericFlag
-
-func (f *GenericFlag) Apply(set *flag.FlagSet) error
-    Apply saves the flagSet for later usage calls, then calls the wrapped
-    GenericFlag.Apply
-
-func (f *GenericFlag) ApplyInputSourceValue(cCtx *cli.Context, isc InputSourceContext) error
-    ApplyInputSourceValue applies a generic value to the flagSet if required
-
-type InputSourceContext interface {
-	Source() string
-
-	Int(name string) (int, error)
-	Int64(name string) (int64, error)
-	Uint(name string) (uint, error)
-	Uint64(name string) (uint64, error)
-	Duration(name string) (time.Duration, error)
-	Float64(name string) (float64, error)
-	String(name string) (string, error)
-	StringSlice(name string) ([]string, error)
-	IntSlice(name string) ([]int, error)
-	Int64Slice(name string) ([]int64, error)
-	Float64Slice(name string) ([]float64, error)
-	Generic(name string) (cli.Generic, error)
-	Bool(name string) (bool, error)
-
-	// Has unexported methods.
-}
-    InputSourceContext is an interface used to allow other input sources to be
-    implemented as needed.
-
-    Source returns an identifier for the input source. In case of file source it
-    should return path to the file.
-
-func NewJSONSource(data []byte) (InputSourceContext, error)
-    NewJSONSource returns an InputSourceContext suitable for retrieving config
-    variables from raw JSON data.
-
-func NewJSONSourceFromFile(f string) (InputSourceContext, error)
-    NewJSONSourceFromFile returns an InputSourceContext suitable for retrieving
-    config variables from a file (or url) containing JSON data.
-
-func NewJSONSourceFromReader(r io.Reader) (InputSourceContext, error)
-    NewJSONSourceFromReader returns an InputSourceContext suitable for
-    retrieving config variables from an io.Reader that returns JSON data.
-
-func NewTomlSourceFromFile(file string) (InputSourceContext, error)
-    NewTomlSourceFromFile creates a new TOML InputSourceContext from a filepath.
-
-func NewYamlSourceFromFile(file string) (InputSourceContext, error)
-    NewYamlSourceFromFile creates a new Yaml InputSourceContext from a filepath.
-
-type Int64Flag struct {
-	*cli.Int64Flag
-	// Has unexported fields.
-}
-    Int64Flag is the flag type that wraps cli.Int64Flag to allow for other
-    values to be specified
-
-func NewInt64Flag(fl *cli.Int64Flag) *Int64Flag
-    NewInt64Flag creates a new Int64Flag
-
-func (f *Int64Flag) Apply(set *flag.FlagSet) error
-    Apply saves the flagSet for later usage calls, then calls the wrapped
-    Int64Flag.Apply
-
-func (f *Int64Flag) ApplyInputSourceValue(cCtx *cli.Context, isc InputSourceContext) error
-
-type Int64SliceFlag struct {
-	*cli.Int64SliceFlag
-	// Has unexported fields.
-}
-    Int64SliceFlag is the flag type that wraps cli.Int64SliceFlag to allow for
-    other values to be specified
-
-func NewInt64SliceFlag(fl *cli.Int64SliceFlag) *Int64SliceFlag
-    NewInt64SliceFlag creates a new Int64SliceFlag
-
-func (f *Int64SliceFlag) Apply(set *flag.FlagSet) error
-    Apply saves the flagSet for later usage calls, then calls the wrapped
-    Int64SliceFlag.Apply
-
-func (f *Int64SliceFlag) ApplyInputSourceValue(cCtx *cli.Context, isc InputSourceContext) error
-    ApplyInputSourceValue applies a Int64Slice value if required
-
-type IntFlag struct {
-	*cli.IntFlag
-	// Has unexported fields.
-}
-    IntFlag is the flag type that wraps cli.IntFlag to allow for other values to
-    be specified
-
-func NewIntFlag(fl *cli.IntFlag) *IntFlag
-    NewIntFlag creates a new IntFlag
-
-func (f *IntFlag) Apply(set *flag.FlagSet) error
-    Apply saves the flagSet for later usage calls, then calls the wrapped
-    IntFlag.Apply
-
-func (f *IntFlag) ApplyInputSourceValue(cCtx *cli.Context, isc InputSourceContext) error
-    ApplyInputSourceValue applies a int value to the flagSet if required
-
-type IntSliceFlag struct {
-	*cli.IntSliceFlag
-	// Has unexported fields.
-}
-    IntSliceFlag is the flag type that wraps cli.IntSliceFlag to allow for other
-    values to be specified
-
-func NewIntSliceFlag(fl *cli.IntSliceFlag) *IntSliceFlag
-    NewIntSliceFlag creates a new IntSliceFlag
-
-func (f *IntSliceFlag) Apply(set *flag.FlagSet) error
-    Apply saves the flagSet for later usage calls, then calls the wrapped
-    IntSliceFlag.Apply
-
-func (f *IntSliceFlag) ApplyInputSourceValue(cCtx *cli.Context, isc InputSourceContext) error
-    ApplyInputSourceValue applies a IntSlice value if required
-
-type MapInputSource struct {
-	// Has unexported fields.
-}
-    MapInputSource implements InputSourceContext to return data from the map
-    that is loaded.
-
-func NewMapInputSource(file string, valueMap map[interface{}]interface{}) *MapInputSource
-    NewMapInputSource creates a new MapInputSource for implementing custom input
-    sources.
-
-func (fsm *MapInputSource) Bool(name string) (bool, error)
-    Bool returns an bool from the map otherwise returns false
-
-func (fsm *MapInputSource) Duration(name string) (time.Duration, error)
-    Duration returns a duration from the map if it exists otherwise returns 0
-
-func (fsm *MapInputSource) Float64(name string) (float64, error)
-    Float64 returns an float64 from the map if it exists otherwise returns 0
-
-func (fsm *MapInputSource) Float64Slice(name string) ([]float64, error)
-    Float64Slice returns an []float64 from the map if it exists otherwise
-    returns nil
-
-func (fsm *MapInputSource) Generic(name string) (cli.Generic, error)
-    Generic returns an cli.Generic from the map if it exists otherwise returns
-    nil
-
-func (fsm *MapInputSource) Int(name string) (int, error)
-    Int returns an int from the map if it exists otherwise returns 0
-
-func (fsm *MapInputSource) Int64(name string) (int64, error)
-    Int64 returns an int64 from the map if it exists otherwise returns 0
-
-func (fsm *MapInputSource) Int64Slice(name string) ([]int64, error)
-    Int64Slice returns an []int64 from the map if it exists otherwise returns
-    nil
-
-func (fsm *MapInputSource) IntSlice(name string) ([]int, error)
-    IntSlice returns an []int from the map if it exists otherwise returns nil
-
-func (fsm *MapInputSource) Source() string
-    Source returns the path of the source file
-
-func (fsm *MapInputSource) String(name string) (string, error)
-    String returns a string from the map if it exists otherwise returns an empty
-    string
-
-func (fsm *MapInputSource) StringSlice(name string) ([]string, error)
-    StringSlice returns an []string from the map if it exists otherwise returns
-    nil
-
-func (fsm *MapInputSource) Uint(name string) (uint, error)
-    Int64 returns an int64 from the map if it exists otherwise returns 0
-
-func (fsm *MapInputSource) Uint64(name string) (uint64, error)
-    UInt64 returns an uint64 from the map if it exists otherwise returns 0
-
-type PathFlag struct {
-	*cli.PathFlag
-	// Has unexported fields.
-}
-    PathFlag is the flag type that wraps cli.PathFlag to allow for other values
-    to be specified
-
-func NewPathFlag(fl *cli.PathFlag) *PathFlag
-    NewPathFlag creates a new PathFlag
-
-func (f *PathFlag) Apply(set *flag.FlagSet) error
-    Apply saves the flagSet for later usage calls, then calls the wrapped
-    PathFlag.Apply
-
-func (f *PathFlag) ApplyInputSourceValue(cCtx *cli.Context, isc InputSourceContext) error
-    ApplyInputSourceValue applies a Path value to the flagSet if required
-
-type StringFlag struct {
-	*cli.StringFlag
-	// Has unexported fields.
-}
-    StringFlag is the flag type that wraps cli.StringFlag to allow for other
-    values to be specified
-
-func NewStringFlag(fl *cli.StringFlag) *StringFlag
-    NewStringFlag creates a new StringFlag
-
-func (f *StringFlag) Apply(set *flag.FlagSet) error
-    Apply saves the flagSet for later usage calls, then calls the wrapped
-    StringFlag.Apply
-
-func (f *StringFlag) ApplyInputSourceValue(cCtx *cli.Context, isc InputSourceContext) error
-    ApplyInputSourceValue applies a String value to the flagSet if required
-
-type StringSliceFlag struct {
-	*cli.StringSliceFlag
-	// Has unexported fields.
-}
-    StringSliceFlag is the flag type that wraps cli.StringSliceFlag to allow for
-    other values to be specified
-
-func NewStringSliceFlag(fl *cli.StringSliceFlag) *StringSliceFlag
-    NewStringSliceFlag creates a new StringSliceFlag
-
-func (f *StringSliceFlag) Apply(set *flag.FlagSet) error
-    Apply saves the flagSet for later usage calls, then calls the wrapped
-    StringSliceFlag.Apply
-
-func (f *StringSliceFlag) ApplyInputSourceValue(cCtx *cli.Context, isc InputSourceContext) error
-    ApplyInputSourceValue applies a StringSlice value to the flagSet if required
-
-type Uint64Flag struct {
-	*cli.Uint64Flag
-	// Has unexported fields.
-}
-    Uint64Flag is the flag type that wraps cli.Uint64Flag to allow for other
-    values to be specified
-
-func NewUint64Flag(fl *cli.Uint64Flag) *Uint64Flag
-    NewUint64Flag creates a new Uint64Flag
-
-func (f *Uint64Flag) Apply(set *flag.FlagSet) error
-    Apply saves the flagSet for later usage calls, then calls the wrapped
-    Uint64Flag.Apply
-
-func (f *Uint64Flag) ApplyInputSourceValue(cCtx *cli.Context, isc InputSourceContext) error
-
-type UintFlag struct {
-	*cli.UintFlag
-	// Has unexported fields.
-}
-    UintFlag is the flag type that wraps cli.UintFlag to allow for other values
-    to be specified
-
-func NewUintFlag(fl *cli.UintFlag) *UintFlag
-    NewUintFlag creates a new UintFlag
-
-func (f *UintFlag) Apply(set *flag.FlagSet) error
-    Apply saves the flagSet for later usage calls, then calls the wrapped
-    UintFlag.Apply
-
-func (f *UintFlag) ApplyInputSourceValue(cCtx *cli.Context, isc InputSourceContext) error
 

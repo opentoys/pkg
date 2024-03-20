@@ -1,100 +1,66 @@
 package cli
 
 import (
-	"flag"
 	"fmt"
+	"strings"
 )
 
-// TakesValue returns true of the flag takes a value, otherwise false
-func (f *StringFlag) TakesValue() bool {
-	return true
+type StringFlag = FlagBase[string, StringConfig, stringValue]
+
+// StringConfig defines the configuration for string flags
+type StringConfig struct {
+	// Whether to trim whitespace of parsed value
+	TrimSpace bool
 }
 
-// GetUsage returns the usage string for the flag
-func (f *StringFlag) GetUsage() string {
-	return f.Usage
+// -- string Value
+type stringValue struct {
+	destination *string
+	trimSpace   bool
 }
 
-// GetCategory returns the category for the flag
-func (f *StringFlag) GetCategory() string {
-	return f.Category
-}
+// Below functions are to satisfy the ValueCreator interface
 
-// GetValue returns the flags value as string representation and an empty
-// string if the flag takes no value at all.
-func (f *StringFlag) GetValue() string {
-	return f.Value
-}
-
-// GetDefaultText returns the default text for this flag
-func (f *StringFlag) GetDefaultText() string {
-	if f.DefaultText != "" {
-		return f.DefaultText
+func (i stringValue) Create(val string, p *string, c StringConfig) Value {
+	*p = val
+	return &stringValue{
+		destination: p,
+		trimSpace:   c.TrimSpace,
 	}
-	val := f.Value
-	if f.defaultValueSet {
-		val = f.defaultValue
-	}
-
-	if val == "" {
-		return val
-	}
-	return fmt.Sprintf("%q", val)
 }
 
-// GetEnvVars returns the env vars for this flag
-func (f *StringFlag) GetEnvVars() []string {
-	return f.EnvVars
+func (i stringValue) ToString(b string) string {
+	if b == "" {
+		return b
+	}
+	return fmt.Sprintf("%q", b)
 }
 
-// Apply populates the flag given the flag set and environment
-func (f *StringFlag) Apply(set *flag.FlagSet) error {
-	// set default value so that environment wont be able to overwrite it
-	f.defaultValue = f.Value
-	f.defaultValueSet = true
+// Below functions are to satisfy the flag.Value interface
 
-	if val, _, found := flagFromEnvOrFile(f.EnvVars, f.FilePath); found {
-		f.Value = val
-		f.HasBeenSet = true
+func (s *stringValue) Set(val string) error {
+	if s.trimSpace {
+		val = strings.TrimSpace(val)
 	}
-
-	for _, name := range f.Names() {
-		if f.Destination != nil {
-			set.StringVar(f.Destination, name, f.Value, f.Usage)
-			continue
-		}
-		set.String(name, f.Value, f.Usage)
-	}
-
+	*s.destination = val
 	return nil
 }
 
-// Get returns the flag’s value in the given Context.
-func (f *StringFlag) Get(ctx *Context) string {
-	return ctx.String(f.Name)
-}
+func (s *stringValue) Get() any { return *s.destination }
 
-// RunAction executes flag action if set
-func (f *StringFlag) RunAction(c *Context) error {
-	if f.Action != nil {
-		return f.Action(c, c.String(f.Name))
-	}
-
-	return nil
-}
-
-// String looks up the value of a local StringFlag, returns
-// "" if not found
-func (cCtx *Context) String(name string) string {
-	if fs := cCtx.lookupFlagSet(name); fs != nil {
-		return lookupString(name, fs)
+func (s *stringValue) String() string {
+	if s.destination != nil {
+		return *s.destination
 	}
 	return ""
 }
 
-func lookupString(name string, set *flag.FlagSet) string {
-	if f := set.Lookup(name); f != nil {
-		return f.Value.String()
+func (cmd *Command) String(name string) string {
+	if v, ok := cmd.Value(name).(string); ok {
+		tracef("string available for flag name %[1]q with value=%[2]v (cmd=%[3]q)", name, v, cmd.Name)
+		return v
 	}
+
+	tracef("string NOT available for flag name %[1]q (cmd=%[2]q)", name, cmd.Name)
 	return ""
 }

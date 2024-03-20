@@ -41,9 +41,7 @@ func (m *multiError) Error() string {
 // Errors returns a copy of the errors slice
 func (m *multiError) Errors() []error {
 	errs := make([]error, len(*m))
-	for _, err := range *m {
-		errs = append(errs, err)
-	}
+	copy(errs, *m)
 	return errs
 }
 
@@ -57,8 +55,7 @@ type errRequiredFlags struct {
 }
 
 func (e *errRequiredFlags) Error() string {
-	numberOfMissingFlags := len(e.missingFlags)
-	if numberOfMissingFlags == 1 {
+	if len(e.missingFlags) == 1 {
 		return fmt.Sprintf("Required flag %q not set", e.missingFlags[0])
 	}
 	joinedMissingFlags := strings.Join(e.missingFlags, ", ")
@@ -67,6 +64,39 @@ func (e *errRequiredFlags) Error() string {
 
 func (e *errRequiredFlags) getMissingFlags() []string {
 	return e.missingFlags
+}
+
+type mutuallyExclusiveGroup struct {
+	flag1Name string
+	flag2Name string
+}
+
+func (e *mutuallyExclusiveGroup) Error() string {
+	return fmt.Sprintf("option %s cannot be set along with option %s", e.flag1Name, e.flag2Name)
+}
+
+type mutuallyExclusiveGroupRequiredFlag struct {
+	flags *MutuallyExclusiveFlags
+}
+
+func (e *mutuallyExclusiveGroupRequiredFlag) Error() string {
+
+	var missingFlags []string
+	for _, grpf := range e.flags.Flags {
+		var grpString []string
+		for _, f := range grpf {
+			grpString = append(grpString, f.Names()...)
+		}
+		if len(e.flags.Flags) == 1 {
+			err := errRequiredFlags{
+				missingFlags: grpString,
+			}
+			return err.Error()
+		}
+		missingFlags = append(missingFlags, strings.Join(grpString, " "))
+	}
+
+	return fmt.Sprintf("one of these flags needs to be provided: %s", strings.Join(missingFlags, ", "))
 }
 
 // ErrorFormatter is the interface that will suitably format the error output
@@ -84,13 +114,6 @@ type ExitCoder interface {
 type exitError struct {
 	exitCode int
 	err      error
-}
-
-// NewExitError calls Exit to create a new ExitCoder.
-//
-// Deprecated: This function is a duplicate of Exit and will eventually be removed.
-func NewExitError(message interface{}, exitCode int) ExitCoder {
-	return Exit(message, exitCode)
 }
 
 // Exit wraps a message and exit code into an error, which by default is
@@ -175,4 +198,13 @@ func handleMultiError(multiErr MultiError) int {
 		}
 	}
 	return code
+}
+
+type typeError[T any] struct {
+	other any
+}
+
+func (te *typeError[T]) Error() string {
+	var t T
+	return fmt.Sprintf("Expected type %T got instead %T", t, te.other)
 }

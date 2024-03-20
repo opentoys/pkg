@@ -1,7 +1,8 @@
 package cli
 
-var helpNameTemplate = `{{$v := offset .HelpName 6}}{{wrap .HelpName 3}}{{if .Usage}} - {{wrap .Usage $v}}{{end}}`
-var usageTemplate = `{{if .UsageText}}{{wrap .UsageText 3}}{{else}}{{.HelpName}}{{if .VisibleFlags}} [command options]{{end}} {{if .ArgsUsage}}{{.ArgsUsage}}{{else}}{{if .Args}}[arguments...]{{end}}[arguments...]{{end}}{{end}}`
+var helpNameTemplate = `{{$v := offset .FullName 6}}{{wrap .FullName 3}}{{if .Usage}} - {{wrap .Usage $v}}{{end}}`
+var argsTemplate = `{{if .Arguments}}{{range .Arguments}}{{.Usage}}{{end}}{{end}}`
+var usageTemplate = `{{if .UsageText}}{{wrap .UsageText 3}}{{else}}{{.FullName}}{{if .VisibleFlags}} [command [command options]]{{end}} {{if .ArgsUsage}}{{.ArgsUsage}}{{else}}{{template "argsTemplate" .}}{{end}}{{end}}`
 var descriptionTemplate = `{{wrap .Description 3}}`
 var authorsTemplate = `{{with $length := len .Authors}}{{if ne 1 $length}}S{{end}}{{end}}:
    {{range $index, $author := .Authors}}{{if $index}}
@@ -28,14 +29,14 @@ VERSION:
 
 var copyrightTemplate = `{{wrap .Copyright 3}}`
 
-// AppHelpTemplate is the text template for the Default help topic.
+// RootCommandHelpTemplate is the text template for the Default help topic.
 // cli.go uses text/template to render templates. You can
 // render custom help text by setting this variable.
-var AppHelpTemplate = `NAME:
+var RootCommandHelpTemplate = `NAME:
    {{template "helpNameTemplate" .}}
 
 USAGE:
-   {{if .UsageText}}{{wrap .UsageText 3}}{{else}}{{.HelpName}} {{if .VisibleFlags}}[global options]{{end}}{{if .Commands}} command [command options]{{end}} {{if .ArgsUsage}}{{.ArgsUsage}}{{else}}{{if .Args}}[arguments...]{{end}}{{end}}{{end}}{{if .Version}}{{if not .HideVersion}}
+   {{if .UsageText}}{{wrap .UsageText 3}}{{else}}{{.FullName}} {{if .VisibleFlags}}[global options]{{end}}{{if .VisibleCommands}} [command [command options]]{{end}} {{if .ArgsUsage}}{{.ArgsUsage}}{{else}}[arguments...]{{end}}{{end}}{{if .Version}}{{if not .HideVersion}}
 
 VERSION:
    {{.Version}}{{end}}{{end}}{{if .Description}}
@@ -83,54 +84,24 @@ var SubcommandHelpTemplate = `NAME:
    {{template "helpNameTemplate" .}}
 
 USAGE:
-   {{if .UsageText}}{{wrap .UsageText 3}}{{else}}{{.HelpName}} {{if .VisibleFlags}}command [command options]{{end}} {{if .ArgsUsage}}{{.ArgsUsage}}{{else}}{{if .Args}}[arguments...]{{end}}{{end}}{{end}}{{if .Description}}
+   {{if .UsageText}}{{wrap .UsageText 3}}{{else}}{{.FullName}} {{if .VisibleCommands}}[command [command options]] {{end}}{{if .ArgsUsage}}{{.ArgsUsage}}{{else}}[arguments...]{{end}}{{end}}{{if .Category}}
+
+CATEGORY:
+   {{.Category}}{{end}}{{if .Description}}
 
 DESCRIPTION:
    {{template "descriptionTemplate" .}}{{end}}{{if .VisibleCommands}}
 
-COMMANDS:{{template "visibleCommandCategoryTemplate" .}}{{end}}{{if .VisibleFlagCategories}}
+COMMANDS:{{template "visibleCommandTemplate" .}}{{end}}{{if .VisibleFlagCategories}}
 
 OPTIONS:{{template "visibleFlagCategoryTemplate" .}}{{else if .VisibleFlags}}
 
 OPTIONS:{{template "visibleFlagTemplate" .}}{{end}}
 `
 
-var MarkdownDocTemplate = `{{if gt .SectionNum 0}}% {{ .App.Name }} {{ .SectionNum }}
+var FishCompletionTemplate = `# {{ .Command.Name }} fish shell completion
 
-{{end}}# NAME
-
-{{ .App.Name }}{{ if .App.Usage }} - {{ .App.Usage }}{{ end }}
-
-# SYNOPSIS
-
-{{ .App.Name }}
-{{ if .SynopsisArgs }}
-` + "```" + `
-{{ range $v := .SynopsisArgs }}{{ $v }}{{ end }}` + "```" + `
-{{ end }}{{ if .App.Description }}
-# DESCRIPTION
-
-{{ .App.Description }}
-{{ end }}
-**Usage**:
-
-` + "```" + `{{ if .App.UsageText }}
-{{ .App.UsageText }}
-{{ else }}
-{{ .App.Name }} [GLOBAL OPTIONS] command [COMMAND OPTIONS] [ARGUMENTS...]
-{{ end }}` + "```" + `
-{{ if .GlobalArgs }}
-# GLOBAL OPTIONS
-{{ range $v := .GlobalArgs }}
-{{ $v }}{{ end }}
-{{ end }}{{ if .Commands }}
-# COMMANDS
-{{ range $v := .Commands }}
-{{ $v }}{{ end }}{{ end }}`
-
-var FishCompletionTemplate = `# {{ .App.Name }} fish shell completion
-
-function __fish_{{ .App.Name }}_no_subcommand --description 'Test if there has been any subcommand yet'
+function __fish_{{ .Command.Name }}_no_subcommand --description 'Test if there has been any subcommand yet'
     for i in (commandline -opc)
         if contains -- $i{{ range $v := .AllCommands }} {{ $v }}{{ end }}
             return 1
