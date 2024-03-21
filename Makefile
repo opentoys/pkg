@@ -66,5 +66,22 @@ cache:
 	rm -rf cache/*_test.go && \
 	git add cache && git commit -m 'feat: sync clear github.com/patrickmn/go-cache'
 
+msgpack:
+	rm -rf msgpack && \
+	git clone https://github.com/shamaton/msgpack msgpack && \
+	rm -rf msgpack/.git && \
+	rm -rf msgpack/.github && \
+	rm -rf msgpack/*_test.go && \
+	rm -rf msgpack/testdata && \
+	rm -rf msgpack/go.* && \
+	sed -i '' 's/github.com\/shamaton\/msgpack/github.com\/opentoys\/pkg\/msgpack/' msgpack/*.go && \
+	sed -i '' 's/github.com\/shamaton\/msgpack/github.com\/opentoys\/pkg\/msgpack/' msgpack/time/*.go && \
+	sed -i '' 's/github.com\/shamaton\/msgpack/github.com\/opentoys\/pkg\/msgpack/' msgpack/time/*.go && \
+	sed -i '' 's/github.com\/shamaton\/msgpack/github.com\/opentoys\/pkg\/msgpack/' msgpack/internal/decoding/*.go && \
+	sed -i '' 's/github.com\/shamaton\/msgpack/github.com\/opentoys\/pkg\/msgpack/' msgpack/internal/encoding/*.go && \
+	sed -i '' 's/github.com\/shamaton\/msgpack/github.com\/opentoys\/pkg\/msgpack/' msgpack/internal/stream/decoding/*.go && \
+	sed -i '' 's/github.com\/shamaton\/msgpack/github.com\/opentoys\/pkg\/msgpack/' msgpack/internal/stream/encoding/*.go && \
+	git add cache && git commit -m 'feat: sync clear github.com/shamaton/msgpack'
+
 mod:
 	go mod tidy
