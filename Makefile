@@ -1,4 +1,4 @@
-.PHONY: ini jwt cli redigo all
+.PHONY: ini jwt cli redigo all cache
 
 all:
 	make ini && make jwt && make redigo && make cli
@@ -58,6 +58,13 @@ resize:
 	rm -rf resize/.git && \
 	rm -rf resize/*_test.go && \
 	git add resize && git commit -m 'feat: sync clear github.com/nfnt/resize'
+
+cache:
+	rm -rf cache && \
+	git clone https://github.com/patrickmn/go-cache cache && \
+	rm -rf cache/.git && \
+	rm -rf cache/*_test.go && \
+	git add cache && git commit -m 'feat: sync clear github.com/patrickmn/go-cache'
 
 mod:
 	go mod tidy
