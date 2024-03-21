@@ -81,7 +81,16 @@ msgpack:
 	sed -i '' 's/github.com\/shamaton\/msgpack/github.com\/opentoys\/pkg\/msgpack/' msgpack/internal/encoding/*.go && \
 	sed -i '' 's/github.com\/shamaton\/msgpack/github.com\/opentoys\/pkg\/msgpack/' msgpack/internal/stream/decoding/*.go && \
 	sed -i '' 's/github.com\/shamaton\/msgpack/github.com\/opentoys\/pkg\/msgpack/' msgpack/internal/stream/encoding/*.go && \
-	git add cache && git commit -m 'feat: sync clear github.com/shamaton/msgpack'
+	git add msgpack && git commit -m 'feat: sync clear github.com/shamaton/msgpack'
+
+defaults:
+	rm -rf defaults && \
+	git clone https://github.com/mcuadros/go-defaults defaults && \
+	rm -rf defaults/.git && \
+	rm -rf defaults/.github && \
+	rm -rf defaults/*_test.go && \
+	rm -rf defaults/go.* && \
+	git add defaults && git commit -m 'feat: sync clear github.com/mcuadros/go-defaults'
 
 mod:
 	go mod tidy
