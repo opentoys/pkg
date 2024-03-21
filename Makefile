@@ -1,3 +1,8 @@
+.PHONY: ini jwt cli redigo all
+
+all:
+	make ini && make jwt && make redigo && make cli
+
 ini:
 	rm -rf ini && \
 	git clone https://github.com/go-ini/ini ini && \
@@ -46,9 +51,13 @@ cli:
 	rm -rf cli/go.* && \
 	rm -rf cli/suggestions.go && \
 	git add cli && git commit -m 'feat: sync clear github.com/urfave/cli'
-	
-github:
-	make ini && make jwt && make redigo && make cli
+
+resize:
+	rm -rf resize && \
+	git clone https://github.com/nfnt/resize resize && \
+	rm -rf resize/.git && \
+	rm -rf resize/*_test.go && \
+	git add resize && git commit -m 'feat: sync clear github.com/nfnt/resize'
 
 mod:
 	go mod tidy
