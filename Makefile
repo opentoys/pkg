@@ -1,51 +1,51 @@
 ini:
-	rm -rf github.com/ini && \
-	git clone https://github.com/go-ini/ini github.com/ini && \
-	rm -rf github.com/ini/.git && \
-	rm -rf github.com/ini/.github && \
-	rm -rf github.com/ini/testdata && \
-	rm -rf github.com/ini/*_test.go && \
-	rm -rf github.com/ini/go.* && \
-	git add github.com/ini && git commit -m 'feat: sync clear github.com/go-ini/ini'
+	rm -rf ini && \
+	git clone https://github.com/go-ini/ini ini && \
+	rm -rf ini/.git && \
+	rm -rf ini/.github && \
+	rm -rf ini/testdata && \
+	rm -rf ini/*_test.go && \
+	rm -rf ini/go.* && \
+	git add ini && git commit -m 'feat: sync clear github.com/go-ini/ini'
 
 jwt:
-	rm -rf github.com/jwt && \
-	git clone https://github.com/golang-jwt/jwt github.com/jwt && \
-	rm -rf github.com/jwt/.git && \
-	rm -rf github.com/jwt/.github && \
-	rm -rf github.com/jwt/cmd && \
-	rm -rf github.com/jwt/request && \
-	rm -rf github.com/jwt/test && \
-	rm -rf github.com/jwt/*_test.go && \
-	rm -rf github.com/jwt/go.* && \
-	git add github.com/jwt && git commit -m 'feat: sync clear github.com/golang-jwt/jwt'
+	rm -rf jwt && \
+	git clone https://github.com/golang-jwt/jwt jwt && \
+	rm -rf jwt/.git && \
+	rm -rf jwt/.github && \
+	rm -rf jwt/cmd && \
+	rm -rf jwt/request && \
+	rm -rf jwt/test && \
+	rm -rf jwt/*_test.go && \
+	rm -rf jwt/go.* && \
+	git add jwt && git commit -m 'feat: sync clear github.com/golang-jwt/jwt'
 
 redigo:
-	rm -rf github.com/redigo && \
-	git clone https://github.com/gomodule/redigo github.com/redigo && \
-	rm -rf github.com/redigo/.git && \
-	rm -rf github.com/redigo/.github && \
-	rm -rf github.com/redigo/redisx && \
-	rm -rf github.com/redigo/go.* && \
-	cp github.com/redigo/redis/* github.com/redigo && \
-	rm -rf github.com/redigo/redis && \
-	rm -rf github.com/redigo/*_test.go && \
-	sed -i '' 's/package redis/package redigo/' github.com/redigo/*.go && \
-	git add github.com/redigo && git commit -m 'feat: sync clear github.com/gomodule/redigo'
+	rm -rf redigo && \
+	git clone https://github.com/gomodule/redigo redigo && \
+	rm -rf redigo/.git && \
+	rm -rf redigo/.github && \
+	rm -rf redigo/redisx && \
+	rm -rf redigo/go.* && \
+	cp redigo/redis/* redigo && \
+	rm -rf redigo/redis && \
+	rm -rf redigo/*_test.go && \
+	sed -i '' 's/package redis/package redigo/' redigo/*.go && \
+	git add redigo && git commit -m 'feat: sync clear github.com/gomodule/redigo'
 
 cli:
-	rm -rf github.com/cli && \
-	git clone https://github.com/urfave/cli github.com/cli && \
-	rm -rf github.com/cli/.git && \
-	rm -rf github.com/cli/.github && \
-	rm -rf github.com/cli/autocomplete && \
-	rm -rf github.com/cli/docs && \
-	rm -rf github.com/cli/internal && \
-	rm -rf github.com/cli/testdata && \
-	rm -rf github.com/cli/*_test.go && \
-	rm -rf github.com/cli/go.* && \
-	rm -rf github.com/cli/suggestions.go && \
-	git add github.com/cli && git commit -m 'feat: sync clear github.com/urfave/cli'
+	rm -rf cli && \
+	git clone https://github.com/urfave/cli cli && \
+	rm -rf cli/.git && \
+	rm -rf cli/.github && \
+	rm -rf cli/autocomplete && \
+	rm -rf cli/docs && \
+	rm -rf cli/internal && \
+	rm -rf cli/testdata && \
+	rm -rf cli/*_test.go && \
+	rm -rf cli/go.* && \
+	rm -rf cli/suggestions.go && \
+	git add cli && git commit -m 'feat: sync clear github.com/urfave/cli'
 	
 github:
 	make ini && make jwt && make redigo && make cli
